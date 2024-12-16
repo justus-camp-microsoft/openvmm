@@ -34,10 +34,10 @@ def main(repo_path: str, target_branch: str, token: str, pull_request: str, team
         if any(review_team.slug.lower() == team.lower() for review_team in pull_request.get_review_requests()[1]):
             print(f'{team} is already present on the pull request')
         else:
-            pull_request.create_review_request(team_reviewers=[team])
+            pull_request.create_review_request(reviewers=["benhillis"])
     else:
         print(f'No unsafe file modified in this change')
-        pull_request.delete_review_request(reviewers=[], team_reviewers=[team])
+        pull_request.delete_review_request(reviewers=["benhillis"])
 
 if __name__ == '__main__':
     main()
