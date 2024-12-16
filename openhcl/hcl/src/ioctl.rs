@@ -626,6 +626,11 @@ impl Mshv {
         let supported = unsafe {
             hcl_check_extension(self.file.as_raw_fd(), &cap).map_err(Error::CheckExtensions)?
         };
+
+        unsafe {
+            println!("fake new unsafe change");
+        }
+
         Ok(supported != 0)
     }
 
