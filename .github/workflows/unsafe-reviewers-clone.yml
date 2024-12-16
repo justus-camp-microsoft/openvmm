@@ -20,6 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged != true && github.event.action != 'closed'
     steps:
+      # NOTE: We're checking out both repos to avoid a security vulnerability
+      # Any code that runs in this workflow should be using the checked out base repo to avoid
+      # running code from a potentially malicious PR
+      # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+      # https://nathandavison.com/blog/github-actions-and-the-threat-of-malicious-pull-requests
       - name: Checkout base repo 
         uses: actions/checkout@v4
         with:
