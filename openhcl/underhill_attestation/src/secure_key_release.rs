@@ -156,30 +156,16 @@ pub async fn request_vmgs_encryption_keys(
                 rsa_aes_wrapped_key: _,
                 wrapped_des_key: _,
             }) if i == (max_retry - 1) => {
-                tracing::error!(
-                    CVM_ALLOWED,
-                    "VMGS key-encryption failed due to invalid key format, max number of attempts reached"
-                );
+                tracing::error!("VMGS key-encryption failed after max number of attempts");
                 break;
             }
             Ok(WrappedKeyVmgsEncryptionKeys {
                 rsa_aes_wrapped_key: _,
                 wrapped_des_key: _,
             }) => {
-                tracing::warn!(
-                    CVM_ALLOWED,
-                    retry = i,
-                    "Failed to get VMGS key-encryption due to invalid key format"
-                )
+                tracing::warn!(CVM_ALLOWED, retry = i, "Failed to get VMGS key-encryption")
             }
-            Err(e) if i == (max_retry - 1) => {
-                tracing::error!(
-                    CVM_ALLOWED,
-                    error = &e as &dyn std::error::Error,
-                    "VMGS key-encryption failed due to error, max number of attempts reached"
-                );
-                Err(e)?
-            }
+            Err(e) if i == (max_retry - 1) => Err(e)?,
             Err(e) => {
                 tracing::error!(
                     CVM_ALLOWED,
