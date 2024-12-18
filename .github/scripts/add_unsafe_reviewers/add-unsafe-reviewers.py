@@ -8,7 +8,7 @@ from github import Auth
 @click.argument('target_branch', required=True)
 @click.option('--token', default=None)
 @click.option('--pull-request', default=None)
-@click.option('--team', default='benhillis')
+@click.option('--team', default='@microsoft/openvmm-unsafe-approvers')
 def main(repo_path: str, target_branch: str, token: str, pull_request: str, team: str):
     def contains_unsafe(change) -> bool:
         if change.change_type not in ['A', 'M'] or not change.a_path.endswith('.rs'):
@@ -34,10 +34,10 @@ def main(repo_path: str, target_branch: str, token: str, pull_request: str, team
         if any(review_team.slug.lower() == team.lower() for review_team in pull_request.get_review_requests()[1]):
             print(f'{team} is already present on the pull request')
         else:
-            pull_request.create_review_request(reviewers=[team], team_reviewers=[])
+            pull_request.create_review_request(team_reviewers=[team])
     else:
         print(f'No unsafe file modified in this change')
-        pull_request.delete_review_request(reviewers=[team])
+        pull_request.delete_review_request(reviewers=[], team_reviewers=[team])
 
 if __name__ == '__main__':
     main()
