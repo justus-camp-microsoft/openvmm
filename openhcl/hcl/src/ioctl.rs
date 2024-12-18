@@ -599,6 +599,10 @@ impl MshvVtlLow {
         &self.file
     }
 
+    pub unsafe fn test_unsafe(&self) {
+        println!("unsafe change");
+    }
+
     /// The flag to set in the file offset to map guest memory as shared instead
     /// of private.
     pub const SHARED_MEMORY_FLAG: u64 = 1 << 63;
