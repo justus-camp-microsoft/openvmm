@@ -591,6 +591,10 @@ impl MshvVtlLow {
             .open("/dev/mshv_vtl_low")
             .map_err(Error::OpenGpa)?;
 
+        unsafe {
+            println!("test unsafe change");
+        }
+
         Ok(Self { file: file.into() })
     }
 
