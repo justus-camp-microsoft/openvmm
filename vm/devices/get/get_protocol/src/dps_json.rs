@@ -157,7 +157,6 @@ pub struct HclDevicePlatformSettingsV2Dynamic {
     pub is_servicing_scenario: bool,
 
     #[serde(default)]
-    #[serde(with = "serde_helpers::vec_base64_vec")]
     pub acpi_tables: Vec<Vec<u8>>,
 }
 
