@@ -934,6 +934,15 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
     }
 
     async fn unload_for_servicing(&mut self) {
+        let saved_state = self
+            .vf_managers
+            .values()
+            .map(|vf_manager| vf_manager.save())
+            .collect::<Vec<_>>();
+
+        let saved_state = join_all(saved_state).await;
+        tracing::info!("saved state for servicing: {:?}", saved_state);
+
         let mut vf_managers: Vec<(Guid, Arc<HclNetworkVFManager>)> =
             self.vf_managers.drain().collect();
         self.shutdown_vf_devices(&mut vf_managers, false, true)

@@ -13,6 +13,7 @@ use guest_emulation_transport::GuestEmulationTransportClient;
 use guid::Guid;
 use inspect::Inspect;
 use mana_driver::mana::ManaDevice;
+use mana_driver::mana::ManaDeviceSavedState;
 use mana_driver::mana::VportState;
 use mesh::rpc::FailableRpc;
 use mesh::rpc::Rpc;
@@ -58,6 +59,7 @@ enum HclNetworkVfManagerMessage {
     HideVtl0VF(Rpc<bool, ()>),
     Inspect(inspect::Deferred),
     PacketCapture(FailableRpc<PacketCaptureParams<Socket>, PacketCaptureParams<Socket>>),
+    SaveState(Rpc<(), ManaDeviceSavedState>),
 }
 
 async fn create_mana_device(
@@ -670,6 +672,13 @@ impl HclNetworkVFManagerWorker {
                     // Exit worker thread.
                     return;
                 }
+                NextWorkItem::ManagerMessage(HclNetworkVfManagerMessage::SaveState(rpc)) => {
+                    rpc.handle(|_| async {
+                        self.mana_device.as_ref().unwrap().save().await.unwrap()
+                    })
+                    .await;
+                    return;
+                }
                 NextWorkItem::ManaDeviceArrived => {
                     assert!(!self.is_shutdown_active);
                     let mut ctx =
@@ -976,6 +985,19 @@ impl HclNetworkVFManager {
             endpoints,
             runtime_save_state,
         ))
+    }
+
+    pub async fn save(&self) -> anyhow::Result<ManaDeviceSavedState> {
+        let save_state = self
+            .shared_state
+            .worker_channel
+            .call(HclNetworkVfManagerMessage::SaveState, ())
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        tracing::info!("Returned save_state {:?}", save_state);
+
+        Ok(save_state)
     }
 
     pub async fn packet_capture(

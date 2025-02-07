@@ -9,6 +9,7 @@ pub use crate::resources::ResourceArena;
 use crate::bnic_driver::BnicDriver;
 use crate::bnic_driver::WqConfig;
 use crate::gdma_driver::GdmaDriver;
+use crate::gdma_driver::GdmaDriverSavedState;
 use crate::queues;
 use crate::queues::Doorbell;
 use crate::queues::DoorbellPage;
@@ -58,6 +59,11 @@ impl<T: DeviceBacking> Inspect for ManaDevice<T> {
     fn inspect(&self, req: inspect::Request<'_>) {
         self.inspect_send.send(req.defer());
     }
+}
+
+#[derive(Debug)]
+pub struct ManaDeviceSavedState {
+    gdma: GdmaDriverSavedState,
 }
 
 struct Inner<T: DeviceBacking> {
@@ -225,6 +231,15 @@ impl<T: DeviceBacking> ManaDevice<T> {
         }
 
         Ok(vport)
+    }
+
+    /// Saves the device's state for servicing
+    pub async fn save(&self) -> anyhow::Result<ManaDeviceSavedState> {
+        let mut gdma = self.inner.gdma.lock().await;
+        let saved_state = ManaDeviceSavedState {
+            gdma: gdma.save().await?,
+        };
+        Ok(saved_state)
     }
 
     /// Shuts the device down.

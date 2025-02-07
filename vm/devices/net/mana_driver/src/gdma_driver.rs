@@ -97,6 +97,9 @@ struct Bar0<T: Inspect> {
     doorbell_shift: u32,
 }
 
+#[derive(Debug)]
+pub struct GdmaDriverSavedState {}
+
 impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
     fn page_count(&self) -> u32 {
         self.mem
@@ -270,11 +273,13 @@ impl<T: DeviceBacking> GdmaDriver<T> {
 
         let dma_client = device.dma_client();
 
+        tracing::info!("allocating GDMA DMA buffer");
         let dma_buffer = dma_client
             .allocate_dma_buffer(NUM_PAGES * PAGE_SIZE)
             .context("failed to allocate DMA buffer")?;
 
         let pages = dma_buffer.pfns();
+        tracing::info!("pages: {:?}", pages);
 
         // Write the shared memory.
         fn low(n: u64) -> [u8; 6] {
@@ -485,6 +490,10 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             .min(max_vf_resources.max_rq);
 
         Ok(this)
+    }
+
+    pub async fn save(&mut self) -> anyhow::Result<GdmaDriverSavedState> {
+        return Ok(GdmaDriverSavedState {});
     }
 
     async fn report_hwc_timeout(&mut self, last_cmd_failed: bool, ms_elapsed_for_interrupt: u32) {
