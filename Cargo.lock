@@ -2582,6 +2582,7 @@ dependencies = [
  "mesh_protobuf",
  "thiserror 2.0.0",
  "winapi",
+ "windows",
  "windows-sys 0.52.0",
  "zerocopy 0.8.14",
 ]
@@ -2674,6 +2675,19 @@ dependencies = [
  "uefi_nvram_storage",
  "wchar",
  "zerocopy 0.8.14",
+]
+
+[[package]]
+name = "hcl_mapper"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "hcl",
+ "hvdef",
+ "inspect",
+ "page_pool_alloc",
+ "sparse_mmap",
+ "tracing",
 ]
 
 [[package]]
@@ -4873,7 +4887,6 @@ name = "page_pool_alloc"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "hcl",
  "hvdef",
  "inspect",
  "memory_range",
@@ -4914,6 +4927,7 @@ dependencies = [
  "widestring",
  "win_import_lib",
  "winapi",
+ "windows",
 ]
 
 [[package]]
@@ -5136,6 +5150,7 @@ dependencies = [
  "fscommon",
  "futures",
  "futures-concurrency",
+ "gdma_resources",
  "get_resources",
  "gptman",
  "guid",
@@ -5154,6 +5169,7 @@ dependencies = [
  "mesh",
  "mesh_process",
  "mesh_worker",
+ "net_backend_resources",
  "nvme_resources",
  "pal",
  "pal_async",
@@ -7067,6 +7083,7 @@ dependencies = [
  "guestmem",
  "guid",
  "hcl_compat_uefi_nvram_storage",
+ "hcl_mapper",
  "hvdef",
  "hyperv_ic_guest",
  "hyperv_ic_resources",
@@ -8057,13 +8074,13 @@ dependencies = [
  "futures",
  "guestmem",
  "mesh",
- "ntapi",
  "pal",
  "pal_async",
  "pal_event",
  "tracing",
  "vmbus_core",
- "winapi",
+ "widestring",
+ "windows",
  "zerocopy 0.8.14",
 ]
 
@@ -8226,7 +8243,7 @@ dependencies = [
  "vmbus_proxy",
  "vmbus_ring",
  "vmcore",
- "winapi",
+ "windows",
  "zerocopy 0.8.14",
 ]
 
@@ -8466,28 +8483,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "vmm_test_petri_support"
-version = "0.0.0"
-dependencies = [
- "petri",
- "petri_artifacts_common",
- "petri_artifacts_vmm_test",
-]
-
-[[package]]
 name = "vmm_tests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "build_rs_guest_arch",
  "disk_backend_resources",
- "gdma_resources",
  "guid",
  "hvlite_defs",
  "hvlite_ttrpc_vmservice",
  "mesh",
  "mesh_rpc",
- "net_backend_resources",
  "nvme_resources",
  "pal_async",
  "petri",
@@ -8501,7 +8507,6 @@ dependencies = [
  "vm_resource",
  "vmm_core_defs",
  "vmm_test_macros",
- "vmm_test_petri_support",
  "vtl2_settings_proto",
 ]
 
@@ -8802,7 +8807,6 @@ dependencies = [
  "criterion",
  "win_import_lib",
  "winapi",
- "zerocopy 0.8.14",
 ]
 
 [[package]]
