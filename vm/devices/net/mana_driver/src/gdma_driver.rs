@@ -67,6 +67,7 @@ use gdma_defs::SMC_MSG_TYPE_DESTROY_HWC_VERSION;
 use gdma_defs::SMC_MSG_TYPE_ESTABLISH_HWC_VERSION;
 use gdma_defs::SMC_MSG_TYPE_REPORT_HWC_TIMEOUT_VERSION;
 use inspect::Inspect;
+use mesh::payload::Protobuf;
 use pal_async::driver::Driver;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
@@ -97,7 +98,8 @@ struct Bar0<T: Inspect> {
     doorbell_shift: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Protobuf, Clone)]
+#[mesh(package = "underhill")]
 pub struct GdmaDriverSavedState {}
 
 impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
@@ -489,6 +491,16 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             .min(max_vf_resources.max_sq)
             .min(max_vf_resources.max_rq);
 
+        Ok(this)
+    }
+
+    pub async fn restore(
+        saved_state: GdmaDriverSavedState,
+        driver: &impl Driver,
+        device: T,
+        num_vps: u32,
+    ) -> anyhow::Result<Self> {
+        let this = Self::new(driver, device, num_vps).await?;
         Ok(this)
     }
 

@@ -26,6 +26,7 @@ use gdma_defs::GdmaDevType;
 use gdma_defs::GdmaQueueType;
 use gdma_defs::GdmaRegisterDeviceResp;
 use inspect::Inspect;
+use mesh::payload::Protobuf;
 use net_backend_resources::mac_address::MacAddress;
 use pal_async::driver::SpawnDriver;
 use pal_async::task::Spawn;
@@ -61,8 +62,10 @@ impl<T: DeviceBacking> Inspect for ManaDevice<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Protobuf, Clone)]
+#[mesh(package = "underhill")]
 pub struct ManaDeviceSavedState {
+    #[mesh(1)]
     gdma: GdmaDriverSavedState,
 }
 

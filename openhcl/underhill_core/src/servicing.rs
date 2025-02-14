@@ -8,6 +8,7 @@ pub use state::*;
 use crate::worker::FirmwareType;
 
 mod state {
+    use mana_driver::mana::ManaDeviceSavedState;
     use mesh::payload::Protobuf;
     use state_unit::SavedStateUnit;
     use vmcore::save_restore::SaveRestore;
@@ -82,6 +83,8 @@ mod state {
         /// Private pool information.
         #[mesh(10002)]
         pub private_pool_state: Option<page_pool_alloc::save_restore::PagePoolState>,
+        #[mesh(10003)]
+        pub mana_state: Option<Vec<ManaDeviceSavedState>>,
     }
 
     #[derive(Protobuf)]
@@ -129,6 +132,7 @@ impl From<Firmware> for FirmwareType {
 #[allow(clippy::option_option)]
 pub mod transposed {
     use super::*;
+    use mana_driver::mana::ManaDeviceSavedState;
     use vmcore::save_restore::SaveRestore;
 
     /// A transposed `Option<ServicingInitState>`, where each field of
@@ -138,6 +142,7 @@ pub mod transposed {
         pub firmware_type: Option<Firmware>,
         pub vm_stop_reference_time: Option<u64>,
         pub emuplat: OptionEmuplatSavedState,
+        pub mana_state: Option<Option<Vec<ManaDeviceSavedState>>>,
         pub flush_logs_result: Option<Option<FlushLogsResult>>,
         pub vmgs: Option<(
             vmgs::save_restore::state::SavedVmgsState,
@@ -177,6 +182,7 @@ pub mod transposed {
                     nvme_state,
                     shared_pool_state,
                     private_pool_state,
+                    mana_state,
                 } = state;
 
                 OptionServicingInitState {
@@ -191,6 +197,7 @@ pub mod transposed {
                     vmgs: Some(vmgs),
                     overlay_shutdown_device: Some(overlay_shutdown_device),
                     nvme_state: Some(nvme_state),
+                    mana_state: Some(mana_state),
                     shared_pool_state: Some(shared_pool_state),
                     private_pool_state: Some(private_pool_state),
                 }

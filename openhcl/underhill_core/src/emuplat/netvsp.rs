@@ -875,6 +875,7 @@ impl HclNetworkVFManager {
         vp_count: u32,
         max_sub_channels: u16,
         netvsp_state: &Option<Vec<SavedState>>,
+        mana_state: &Option<Vec<ManaDeviceSavedState>>,
         dma_mode: GuestDmaMode,
         dma_client: Arc<dyn DmaClient>,
     ) -> anyhow::Result<(

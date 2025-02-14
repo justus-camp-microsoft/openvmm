@@ -86,6 +86,7 @@ use input_core::MultiplexedInputHandle;
 use inspect::Inspect;
 use loader_defs::shim::MemoryVtlType;
 use lower_vtl_permissions_guard::LowerVtlMemorySpawner;
+use mana_driver::mana::ManaDeviceSavedState;
 use memory_range::MemoryRange;
 use mesh::rpc::RpcSend;
 use mesh::CancelContext;
@@ -745,6 +746,7 @@ impl UhVmNetworkSettings {
         driver_source: &VmTaskDriverSource,
         uevent_listener: &UeventListener,
         servicing_netvsp_state: &Option<Vec<crate::emuplat::netvsp::SavedState>>,
+        servicing_mana_state: &Option<Vec<ManaDeviceSavedState>>,
         partition: Arc<UhPartition>,
         state_units: &StateUnits,
         tp: &AffinitizedThreadpool,
@@ -769,6 +771,7 @@ impl UhVmNetworkSettings {
             vps_count as u32,
             nic_max_sub_channels,
             servicing_netvsp_state,
+            servicing_mana_state,
             self.dma_mode,
             dma_client,
         )
@@ -881,6 +884,7 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
         threadpool: &AffinitizedThreadpool,
         uevent_listener: &UeventListener,
         servicing_netvsp_state: &Option<Vec<crate::emuplat::netvsp::SavedState>>,
+        servicing_mana_state: &Option<Vec<ManaDeviceSavedState>>,
         partition: Arc<UhPartition>,
         state_units: &StateUnits,
         vmbus_server: &Option<VmbusServerHandle>,
@@ -912,6 +916,7 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
                 &driver_source,
                 uevent_listener,
                 servicing_netvsp_state,
+                servicing_mana_state,
                 partition,
                 state_units,
                 threadpool,
@@ -2856,6 +2861,7 @@ async fn new_underhill_vm(
                     tp,
                     &uevent_listener,
                     &servicing_state.emuplat.netvsp_state,
+                    &servicing_state.mana_state.clone().unwrap(),
                     partition.clone(),
                     &state_units,
                     &vmbus_server,
