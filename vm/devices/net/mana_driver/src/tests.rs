@@ -10,6 +10,7 @@ use crate::bnic_driver::WqConfig;
 use crate::gdma_driver::GdmaDriver;
 use crate::mana::ResourceArena;
 use chipset_device::mmio::ExternallyManagedMmioIntercepts;
+use gdma::GdmaDevice;
 use gdma::VportConfig;
 use gdma_defs::GdmaDevType;
 use gdma_defs::GdmaQueueType;
@@ -157,4 +158,43 @@ async fn test_gdma(driver: DefaultDriver) {
     .await
     .unwrap();
     arena.destroy(&mut gdma).await;
+}
+
+#[async_test]
+async fn test_gdma_restore(driver: DefaultDriver) {
+    let mem = DeviceSharedMemory::new(256 * 1024, 0);
+    let mut msi_set = MsiInterruptSet::new();
+    let device = GdmaDevice::new(
+        &VmTaskDriverSource::new(SingleDriverBackend::new(driver.clone())),
+        mem.guest_memory().clone(),
+        &mut msi_set,
+        vec![VportConfig {
+            mac_address: [1, 2, 3, 4, 5, 6].into(),
+            endpoint: Box::new(NullEndpoint::new()),
+        }],
+        &mut ExternallyManagedMmioIntercepts,
+    );
+    let original_device = EmulatedDevice::new(device, msi_set, mem.clone());
+
+    let mut gdma = GdmaDriver::new(&driver, original_device, 1).await.unwrap();
+    let saved_gdma_state = gdma.save().await.unwrap();
+
+    let mut new_msi_set = MsiInterruptSet::new();
+    let new_device = GdmaDevice::new(
+        &VmTaskDriverSource::new(SingleDriverBackend::new(driver.clone())),
+        mem.guest_memory().clone(),
+        &mut new_msi_set,
+        vec![VportConfig {
+            mac_address: [1, 2, 3, 4, 5, 6].into(),
+            endpoint: Box::new(NullEndpoint::new()),
+        }],
+        &mut ExternallyManagedMmioIntercepts,
+    );
+
+    let new_device = EmulatedDevice::new(new_device, new_msi_set, mem.clone());
+    let mut restored_gdma = GdmaDriver::restore(saved_gdma_state, &driver, new_device, 1)
+        .await
+        .unwrap();
+
+    restored_gdma.test_eq().await.unwrap();
 }
