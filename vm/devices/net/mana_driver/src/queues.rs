@@ -22,14 +22,20 @@ use gdma_defs::OWNER_BITS;
 use gdma_defs::OWNER_MASK;
 use gdma_defs::WQE_ALIGNMENT;
 use inspect::Inspect;
+use mesh::payload::Protobuf;
 use std::marker::PhantomData;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 use user_driver::memory::MemoryBlock;
+use user_driver::memory::MemoryBlockSavedState;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
 use zerocopy::IntoBytes;
 use zerocopy::KnownLayout;
+
+#[derive(Clone, Protobuf, Debug)]
+#[mesh(package = "underhill")]
+pub struct DoorbellSavedState {}
 
 /// An interface to write a doorbell value to signal the device.
 pub trait Doorbell: Send + Sync {
@@ -37,6 +43,7 @@ pub trait Doorbell: Send + Sync {
     fn page_count(&self) -> u32;
     /// Write a doorbell value at page `page`, offset `address`.
     fn write(&self, page: u32, address: u32, value: u64);
+    fn save(&self) -> DoorbellSavedState;
 }
 
 struct NullDoorbell;
@@ -47,6 +54,10 @@ impl Doorbell for NullDoorbell {
     }
 
     fn write(&self, _page: u32, _address: u32, _value: u64) {}
+
+    fn save(&self) -> DoorbellSavedState {
+        DoorbellSavedState {}
+    }
 }
 
 /// A single GDMA doorbell page.
@@ -87,7 +98,27 @@ impl DoorbellPage {
     }
 }
 
+#[derive(Clone, Protobuf, Debug)]
+#[mesh(package = "underhill")]
+pub struct CqEqSavedState {
+    #[mesh(1)]
+    doorbell: DoorbellSavedState,
+    #[mesh(2)]
+    doorbell_addr: u32,
+    #[mesh(4)]
+    mem: MemoryBlockSavedState,
+    #[mesh(5)]
+    id: u32,
+    #[mesh(6)]
+    next: u32,
+    #[mesh(7)]
+    size: u32,
+    #[mesh(8)]
+    shift: u32,
+}
+
 /// An event queue.
+#[derive(Clone)]
 pub struct CqEq<T> {
     doorbell: DoorbellPage,
     doorbell_addr: u32,
@@ -114,12 +145,48 @@ impl CqEq<Cqe> {
     pub fn new_cq(mem: MemoryBlock, doorbell: DoorbellPage, id: u32) -> Self {
         Self::new(GdmaQueueType::GDMA_CQ, DB_CQ, mem, doorbell, id)
     }
+
+    pub fn restore(
+        mem: MemoryBlock,
+        state: CqEqSavedState,
+        doorbell: DoorbellPage,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            doorbell,
+            doorbell_addr: state.doorbell_addr,
+            queue_type: GdmaQueueType::GDMA_CQ,
+            mem,
+            id: state.id,
+            next: state.next,
+            size: state.size,
+            shift: state.shift,
+            _phantom: PhantomData,
+        })
+    }
 }
 
 impl CqEq<Eqe> {
     /// Creates a new event queue.
     pub fn new_eq(mem: MemoryBlock, doorbell: DoorbellPage, id: u32) -> Self {
         Self::new(GdmaQueueType::GDMA_EQ, DB_EQ, mem, doorbell, id)
+    }
+
+    pub fn restore(
+        mem: MemoryBlock,
+        state: CqEqSavedState,
+        doorbell: DoorbellPage,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            doorbell,
+            doorbell_addr: state.doorbell_addr,
+            queue_type: GdmaQueueType::GDMA_EQ,
+            mem,
+            id: state.id,
+            next: state.next,
+            size: state.size,
+            shift: state.shift,
+            _phantom: PhantomData,
+        })
     }
 }
 
@@ -145,6 +212,24 @@ impl<T: IntoBytes + FromBytes + Immutable + KnownLayout> CqEq<T> {
             shift: size.trailing_zeros(),
             _phantom: PhantomData,
         }
+    }
+
+    /// Save the state of the queue
+    pub(crate) fn save(&self) -> CqEqSavedState {
+        tracing::info!("Saving queue state: ");
+        let state = CqEqSavedState {
+            doorbell: DoorbellSavedState {},
+            doorbell_addr: self.doorbell_addr,
+            mem: self.mem.save(),
+            id: self.id,
+            next: self.next,
+            size: self.size,
+            shift: self.shift,
+        };
+
+        tracing::info!("Saving queue state: {:?}", state);
+
+        state
     }
 
     /// Updates the queue ID.
@@ -222,6 +307,25 @@ pub type Cq = CqEq<Cqe>;
 /// An event queue.
 pub type Eq = CqEq<Eqe>;
 
+#[derive(Debug, Protobuf, Clone)]
+#[mesh(package = "underhill")]
+pub struct WqSavedState {
+    #[mesh(1)]
+    pub doorbell: DoorbellSavedState,
+    #[mesh(2)]
+    pub doorbell_addr: u32,
+    #[mesh(3)]
+    pub mem: MemoryBlockSavedState,
+    #[mesh(4)]
+    pub id: u32,
+    #[mesh(5)]
+    pub head: u32,
+    #[mesh(6)]
+    pub tail: u32,
+    #[mesh(7)]
+    pub mask: u32,
+}
+
 /// A work queue (send or receive).
 pub struct Wq {
     doorbell: DoorbellPage,
@@ -261,6 +365,42 @@ impl Wq {
         Self::new(GdmaQueueType::GDMA_RQ, DB_RQ, mem, doorbell, id)
     }
 
+    pub fn restore_rq(
+        mem: MemoryBlock,
+        state: WqSavedState,
+        doorbell: DoorbellPage,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            doorbell,
+            doorbell_addr: state.doorbell_addr,
+            queue_type: GdmaQueueType::GDMA_RQ,
+            mem,
+            id: state.id,
+            head: state.head,
+            tail: state.tail,
+            mask: state.mask,
+            uncommitted_count: 0,
+        })
+    }
+
+    pub fn restore_sq(
+        mem: MemoryBlock,
+        state: WqSavedState,
+        doorbell: DoorbellPage,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            doorbell,
+            doorbell_addr: state.doorbell_addr,
+            queue_type: GdmaQueueType::GDMA_SQ,
+            mem,
+            id: state.id,
+            head: state.head,
+            tail: state.tail,
+            mask: state.mask,
+            uncommitted_count: 0,
+        })
+    }
+
     /// Creates a new work queue.
     fn new(
         queue_type: GdmaQueueType,
@@ -281,6 +421,18 @@ impl Wq {
             tail: 0,
             mask: size - 1,
             uncommitted_count: 0,
+        }
+    }
+
+    pub fn save(&self) -> WqSavedState {
+        WqSavedState {
+            doorbell: DoorbellSavedState {},
+            doorbell_addr: self.doorbell_addr,
+            mem: self.mem.save(),
+            id: self.id,
+            head: self.head,
+            tail: self.tail,
+            mask: self.mask,
         }
     }
 

@@ -3,10 +3,13 @@
 
 //! Interface to the common MANA commands.
 use crate::queues::Cq;
+use crate::queues::CqEqSavedState;
 use crate::queues::Doorbell;
 use crate::queues::DoorbellPage;
+use crate::queues::DoorbellSavedState;
 use crate::queues::Eq;
 use crate::queues::Wq;
+use crate::queues::WqSavedState;
 use crate::resources::Resource;
 use crate::resources::ResourceArena;
 use anyhow::Context;
@@ -100,7 +103,41 @@ struct Bar0<T: Inspect> {
 
 #[derive(Debug, Protobuf, Clone)]
 #[mesh(package = "underhill")]
-pub struct GdmaDriverSavedState {}
+pub struct SavedMemoryState {
+    #[mesh(1)]
+    base_pfn: u64,
+    #[mesh(2)]
+    len: usize,
+}
+
+#[derive(Protobuf, Clone, Debug)]
+#[mesh(package = "underhill")]
+pub struct GdmaDriverSavedState {
+    #[mesh(1)]
+    pub mem: SavedMemoryState,
+    #[mesh(2)]
+    pub eq: CqEqSavedState,
+    #[mesh(3)]
+    pub cq: CqEqSavedState,
+    #[mesh(4)]
+    pub rq: WqSavedState,
+    #[mesh(5)]
+    pub sq: WqSavedState,
+    #[mesh(6)]
+    pub db_id: u32,
+    #[mesh(7)]
+    pub gpa_mkey: u32,
+    #[mesh(8)]
+    pub pdid: u32,
+    #[mesh(9)]
+    pub hwc_subscribed: bool,
+    #[mesh(10)]
+    pub eq_armed: bool,
+    #[mesh(11)]
+    pub cq_armed: bool,
+    #[mesh(12)]
+    pub eq_id_msix: HashMap<u32, u32>,
+}
 
 impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
     fn page_count(&self) -> u32 {
@@ -119,6 +156,10 @@ impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
         // Ensure the doorbell write is ordered after the writes to the queues.
         safe_intrinsics::store_fence();
         self.mem.write_u64(offset as usize, value);
+    }
+
+    fn save(&self) -> DoorbellSavedState {
+        DoorbellSavedState {}
     }
 }
 
@@ -150,6 +191,7 @@ pub struct GdmaDriver<T: DeviceBacking> {
     hwc_warning_time_in_ms: u32,
     hwc_timeout_in_ms: u32,
     hwc_failure: bool,
+    db_id: u32,
 }
 
 const EQ_PAGE: usize = 0;
@@ -305,6 +347,8 @@ impl<T: DeviceBacking> GdmaDriver<T> {
                 .with_msg_type(SmcMessageType::SMC_MSG_TYPE_ESTABLISH_HWC.0)
                 .with_msg_version(SMC_MSG_TYPE_ESTABLISH_HWC_VERSION),
         };
+
+        tracing::info!(eq = ?establish.eq, "establishing eq");
 
         let shmem = <[u32]>::ref_from_bytes(establish.as_bytes()).unwrap();
         assert!(shmem.len() == 8);
@@ -470,6 +514,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             hwc_warning_time_in_ms: HWC_WARNING_TIME_IN_MS,
             hwc_timeout_in_ms: HWC_TIMEOUT_DEFAULT_IN_MS,
             hwc_failure: false,
+            db_id,
         };
 
         this.push_rqe();
@@ -497,15 +542,236 @@ impl<T: DeviceBacking> GdmaDriver<T> {
     pub async fn restore(
         saved_state: GdmaDriverSavedState,
         driver: &impl Driver,
-        device: T,
+        mut device: T,
         num_vps: u32,
     ) -> anyhow::Result<Self> {
-        let this = Self::new(driver, device, num_vps).await?;
+        tracing::info!("starting GDMA restore");
+
+        let bar0_mapping = device.map_bar(0)?;
+        let bar0_len = bar0_mapping.len();
+        if bar0_len < size_of::<RegMap>() {
+            anyhow::bail!("bar0 ({} bytes) too small for reg map", bar0_mapping.len());
+        }
+        // Only allocate the HWC interrupt now. Rest will be allocated later.
+        let num_msix = 1;
+        let interrupt0 = device.map_interrupt(0, 0)?;
+        let mut map = RegMap::new_zeroed();
+        for i in 0..size_of_val(&map) / 4 {
+            let v = bar0_mapping.read_u32(i * 4);
+            // Unmapped device memory will return -1 on reads, so check the first 32
+            // bits for this condition to get a clear error message early.
+            if i == 0 && v == !0 {
+                anyhow::bail!("bar0 read returned -1, device is not present");
+            }
+            map.as_mut_bytes()[i * 4..(i + 1) * 4].copy_from_slice(&v.to_ne_bytes());
+        }
+
+        tracing::debug!(?map, "register map");
+
+        // Log on unknown major version numbers. This is not necessarily an
+        // error, so continue.
+        if map.major_version_number != 0 && map.major_version_number != 1 {
+            tracing::warn!(
+                major = map.major_version_number,
+                minor = map.minor_version_number,
+                micro = map.micro_version_number,
+                "unrecognized major version"
+            );
+        }
+
+        if map.vf_gdma_sriov_shared_sz != 32 {
+            anyhow::bail!(
+                "unexpected shared memory size: {}",
+                map.vf_gdma_sriov_shared_sz
+            );
+        }
+
+        if (bar0_len as u64).saturating_sub(map.vf_gdma_sriov_shared_reg_start)
+            < map.vf_gdma_sriov_shared_sz as u64
+        {
+            anyhow::bail!(
+                "bar0 ({} bytes) too small for shared memory at {}",
+                bar0_mapping.len(),
+                map.vf_gdma_sriov_shared_reg_start
+            );
+        }
+
+        let dma_client = device.dma_client();
+        let dma_buffer =
+            dma_client.attach_dma_buffer(saved_state.mem.len, saved_state.mem.base_pfn)?;
+        let pages = dma_buffer.pfns();
+
+        // Write the shared memory.
+        fn low(n: u64) -> [u8; 6] {
+            let n = n.to_ne_bytes();
+            [n[0], n[1], n[2], n[3], n[4], n[5]]
+        }
+
+        let high = ((pages[EQ_PAGE] >> 48) & 0xf)
+            | ((pages[CQ_PAGE] >> 44) & 0xf0)
+            | ((pages[RQ_PAGE] >> 40) & 0xf00)
+            | ((pages[SQ_PAGE] >> 36) & 0xf000);
+
+        let establish = EstablishHwc {
+            eq: low(pages[EQ_PAGE]),
+            cq: low(pages[CQ_PAGE]),
+            rq: low(pages[RQ_PAGE]),
+            sq: low(pages[SQ_PAGE]),
+            high: high as u16,
+            msix: 0,
+            hdr: SmcProtoHdr::new()
+                .with_msg_type(SmcMessageType::SMC_MSG_TYPE_ESTABLISH_HWC.0)
+                .with_msg_version(SMC_MSG_TYPE_ESTABLISH_HWC_VERSION),
+        };
+
+        tracing::info!(eq = ?establish.eq, "re-establishing eq");
+
+        let shmem = <[u32]>::ref_from_bytes(establish.as_bytes()).unwrap();
+        assert!(shmem.len() == 8);
+        for (i, &n) in shmem.iter().enumerate() {
+            bar0_mapping.write_u32(map.vf_gdma_sriov_shared_reg_start as usize + i * 4, n);
+        }
+
+        // Wait for the device to respond.
+        let mut backoff = Backoff::new(driver);
+        let mut ctx =
+            mesh::CancelContext::new().with_timeout(Duration::from_millis(HWC_POLL_TIMEOUT_IN_MS));
+        let mut hw_failure = false;
+        let header = loop {
+            let header = SmcProtoHdr::from(
+                bar0_mapping.read_u32(map.vf_gdma_sriov_shared_reg_start as usize + 28),
+            );
+            if !header.owner_is_pf() {
+                break header;
+            }
+            if hw_failure {
+                anyhow::bail!("MANA request timed out. SMC_MSG_TYPE_ESTABLISH_HWC");
+            }
+            hw_failure = matches!(
+                ctx.until_cancelled(backoff.back_off()).await,
+                Err(mesh::CancelReason::DeadlineExceeded)
+            );
+        };
+
+        if !header.is_response() {
+            anyhow::bail!("expected response");
+        }
+        if header.status() != 0 {
+            anyhow::bail!("establish failed: {}", header.status());
+        }
+
+        let doorbell_shift = map.vf_db_page_sz.trailing_zeros();
+        let bar0 = Arc::new(Bar0 {
+            mem: bar0_mapping,
+            map,
+            doorbell_shift,
+        });
+
+        let eq = Eq::restore(
+            dma_buffer.subblock(0, PAGE_SIZE),
+            saved_state.eq,
+            DoorbellPage::null(),
+        )?;
+
+        let db_id = saved_state.db_id;
+        let gpa_mkey = saved_state.gpa_mkey;
+        let pdid = saved_state.pdid;
+
+        let cq = Cq::restore(
+            dma_buffer.subblock(CQ_PAGE * PAGE_SIZE, PAGE_SIZE),
+            saved_state.cq,
+            DoorbellPage::new(bar0.clone(), db_id)?,
+        )?;
+
+        let rq = Wq::restore_rq(
+            dma_buffer.subblock(RQ_PAGE * PAGE_SIZE, PAGE_SIZE),
+            saved_state.rq,
+            DoorbellPage::new(bar0.clone(), db_id)?,
+        )?;
+
+        let sq = Wq::restore_sq(
+            dma_buffer.subblock(SQ_PAGE * PAGE_SIZE, PAGE_SIZE),
+            saved_state.sq,
+            DoorbellPage::new(bar0.clone(), db_id)?,
+        )?;
+
+        // To make debugging from the device side easier, randomize the upper
+        // 16 bits of the ActivityId, so that requests can be distinguished.
+        let mut rand_activity_id = [0_u8; 2];
+        getrandom::getrandom(&mut rand_activity_id).unwrap();
+        let hwc_activity_id = (u16::from_ne_bytes(rand_activity_id) as u32) << 16;
+        let mut this = Self {
+            device: Some(device),
+            bar0,
+            dma_buffer,
+            eq,
+            cq,
+            rq,
+            sq,
+            interrupts: vec![Some(interrupt0)],
+            test_events: 0,
+            eq_armed: saved_state.eq_armed,
+            cq_armed: saved_state.cq_armed,
+            gpa_mkey,
+            _pdid: pdid,
+            eq_id_msix: saved_state.eq_id_msix,
+            num_msix,
+            min_queue_avail: 0,
+            hwc_activity_id,
+            link_toggle: Vec::new(),
+            hwc_subscribed: saved_state.hwc_subscribed,
+            hwc_warning_time_in_ms: HWC_WARNING_TIME_IN_MS,
+            hwc_timeout_in_ms: HWC_TIMEOUT_DEFAULT_IN_MS,
+            hwc_failure: false,
+            db_id,
+        };
+
+        this.push_rqe();
+
+        let max_vf_resources = this
+            .query_max_resources()
+            .await
+            .context("query_max_resources")?;
+        tracing::info!("Max VF resources: {:?}", max_vf_resources);
+
+        let device = this.device.as_mut().expect("device should be present");
+        let num_msix = num_vps
+            .min(max_vf_resources.max_msix)
+            .min(device.max_interrupt_count());
+        this.interrupts.resize_with(num_msix as usize, || None);
+        this.num_msix = num_msix;
+        this.min_queue_avail = max_vf_resources
+            .max_eq
+            .min(max_vf_resources.max_sq)
+            .min(max_vf_resources.max_rq);
+
         Ok(this)
     }
 
     pub async fn save(&mut self) -> anyhow::Result<GdmaDriverSavedState> {
-        return Ok(GdmaDriverSavedState {});
+        tracing::info!(
+            "saving GDMA driver state. base_pfn: {}, len: {}",
+            self.dma_buffer.pfns()[0],
+            self.dma_buffer.len()
+        );
+
+        return Ok(GdmaDriverSavedState {
+            mem: SavedMemoryState {
+                base_pfn: self.dma_buffer.pfns()[0],
+                len: self.dma_buffer.len(),
+            },
+            eq: self.eq.save(),
+            cq: self.cq.save(),
+            rq: self.rq.save(),
+            sq: self.sq.save(),
+            db_id: self.db_id,
+            gpa_mkey: self.gpa_mkey,
+            pdid: self._pdid,
+            cq_armed: self.cq_armed,
+            eq_armed: self.eq_armed,
+            hwc_subscribed: self.hwc_subscribed,
+            eq_id_msix: self.eq_id_msix.clone(),
+        });
     }
 
     async fn report_hwc_timeout(&mut self, last_cmd_failed: bool, ms_elapsed_for_interrupt: u32) {

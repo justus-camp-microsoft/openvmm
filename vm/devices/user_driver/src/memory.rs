@@ -3,6 +3,7 @@
 
 //! Traits and types for sharing host memory with the device.
 
+use mesh::payload::Protobuf;
 use safeatomic::AtomicSliceOps;
 use std::sync::atomic::AtomicU8;
 use std::sync::Arc;
@@ -94,6 +95,19 @@ unsafe impl MappedDmaTarget for RestrictedView {
     }
 }
 
+#[derive(Protobuf, Clone, Debug)]
+#[mesh(package = "underhill")]
+pub struct MemoryBlockSavedState {
+    #[mesh(1)]
+    pub base: u64,
+    #[mesh(2)]
+    pub len: u64,
+    #[mesh(3)]
+    pub pfns: Vec<u64>,
+    #[mesh(4)]
+    pub pfn_bias: u64,
+}
+
 /// A DMA target.
 #[derive(Clone)]
 pub struct MemoryBlock {
@@ -114,6 +128,15 @@ impl MemoryBlock {
             base: mem.base(),
             len: mem.len(),
             mem: Arc::new(mem),
+        }
+    }
+
+    pub fn save(&self) -> MemoryBlockSavedState {
+        MemoryBlockSavedState {
+            base: self.base as u64,
+            len: self.len as u64,
+            pfns: self.mem.pfns().to_vec(),
+            pfn_bias: self.mem.pfn_bias(),
         }
     }
 
