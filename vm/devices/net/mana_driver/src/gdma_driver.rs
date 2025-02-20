@@ -219,53 +219,8 @@ impl<T: DeviceBacking> Drop for GdmaDriver<T> {
         if self.hwc_failure {
             return;
         }
-        let data = self
-            .bar0
-            .mem
-            .read_u32(self.bar0.map.vf_gdma_sriov_shared_reg_start as usize + 28);
-        if data == u32::MAX {
-            tracing::error!("Device no longer present");
-            return;
-        }
 
-        let hdr = SmcProtoHdr::new()
-            .with_msg_type(SmcMessageType::SMC_MSG_TYPE_DESTROY_HWC.0)
-            .with_msg_version(SMC_MSG_TYPE_DESTROY_HWC_VERSION);
-
-        let hdr = u32::from_le_bytes(hdr.as_bytes().try_into().expect("known size"));
-        self.bar0.mem.write_u32(
-            self.bar0.map.vf_gdma_sriov_shared_reg_start as usize + 28,
-            hdr,
-        );
-        // Wait for the device to respond.
-        let max_wait_time =
-            std::time::Instant::now() + Duration::from_millis(HWC_POLL_TIMEOUT_IN_MS);
-        let header = loop {
-            let data = self
-                .bar0
-                .mem
-                .read_u32(self.bar0.map.vf_gdma_sriov_shared_reg_start as usize + 28);
-            if data == u32::MAX {
-                tracing::error!("Device no longer present");
-                return;
-            }
-            let header = SmcProtoHdr::from(data);
-            if !header.owner_is_pf() {
-                break header;
-            }
-            if std::time::Instant::now() > max_wait_time {
-                tracing::error!("MANA request timed out. SMC_MSG_TYPE_DESTROY_HWC");
-                return;
-            }
-            std::hint::spin_loop();
-        };
-
-        if !header.is_response() {
-            tracing::error!("expected response");
-        }
-        if header.status() != 0 {
-            tracing::error!("DESTROY_HWC failed: {}", header.status());
-        }
+        tracing::debug!("dropping GDMA driver");
     }
 }
 
@@ -659,7 +614,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             DoorbellPage::new(bar0.clone(), db_id)?,
         )?;
 
-        Ok(Self {
+        let mut this = Self {
             device: Some(device),
             bar0,
             dma_buffer,
@@ -683,7 +638,17 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             hwc_timeout_in_ms: HWC_TIMEOUT_DEFAULT_IN_MS,
             hwc_failure: false,
             db_id,
-        })
+        };
+
+        if saved_state.eq_armed {
+            this.eq.arm();
+        }
+
+        if saved_state.cq_armed {
+            this.cq.arm();
+        }
+
+        Ok(this)
     }
 
     pub async fn save(&mut self) -> anyhow::Result<GdmaDriverSavedState> {
