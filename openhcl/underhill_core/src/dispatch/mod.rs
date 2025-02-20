@@ -121,6 +121,8 @@ pub trait LoadedVmNetworkSettings: Inspect {
     /// Callback after stopping the VM and all workers, in preparation for a VTL2 reboot.
     async fn unload_for_servicing(&mut self);
 
+    async fn save(&mut self) -> Vec<Result<ManaDeviceSavedState, anyhow::Error>>;
+
     /// Handles packet capture related operations.
     async fn packet_capture(
         &self,
@@ -658,7 +660,23 @@ impl LoadedVm {
             None
         };
 
-        let mana_state = None;
+        let mana_state = if let Some(network_settings) = &mut self.network_settings {
+            let results = network_settings.save().await;
+            let mut saved_states = Vec::new();
+
+            for result in results {
+                match result {
+                    Ok(state) => saved_states.push(state),
+                    Err(e) => tracing::warn!("Error saving MANA device state: {:#}", e),
+                }
+            }
+
+            Some(saved_states)
+        } else {
+            None
+        };
+
+        tracing::info!("saved mana_state: {:?}", mana_state);
 
         let units = self.save_units().await.context("state unit save failed")?;
         let vmgs = self

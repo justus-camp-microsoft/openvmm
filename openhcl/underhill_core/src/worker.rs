@@ -940,15 +940,6 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
     }
 
     async fn unload_for_servicing(&mut self) {
-        let saved_state = self
-            .vf_managers
-            .values()
-            .map(|vf_manager| vf_manager.save())
-            .collect::<Vec<_>>();
-
-        let saved_state = join_all(saved_state).await;
-        tracing::info!("saved state for servicing: {:?}", saved_state);
-
         let mut vf_managers: Vec<(Guid, Arc<HclNetworkVFManager>)> =
             self.vf_managers.drain().collect();
         self.shutdown_vf_devices(&mut vf_managers, false, true)
@@ -982,6 +973,15 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
             params = manager.packet_capture(params).await?;
         }
         Ok(params)
+    }
+
+    async fn save(&mut self) -> Vec<Result<ManaDeviceSavedState, anyhow::Error>> {
+        join_all(
+            self.vf_managers
+                .values()
+                .map(|vf_manager| vf_manager.save()),
+        )
+        .await
     }
 }
 
@@ -2849,6 +2849,12 @@ async fn new_underhill_vm(
             net_mana::GuestDmaMode::DirectDma
         },
     };
+
+    tracing::info!(
+        "mana servicing state on create: {:?}",
+        servicing_state.mana_state
+    );
+
     let mut netvsp_state = Vec::with_capacity(controllers.mana.len());
     if !controllers.mana.is_empty() {
         let _span = tracing::info_span!("network_settings").entered();
@@ -2861,7 +2867,7 @@ async fn new_underhill_vm(
                     tp,
                     &uevent_listener,
                     &servicing_state.emuplat.netvsp_state,
-                    &servicing_state.mana_state.clone().unwrap(),
+                    &None,
                     partition.clone(),
                     &state_units,
                     &vmbus_server,
