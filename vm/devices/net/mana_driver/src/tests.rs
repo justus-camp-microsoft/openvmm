@@ -177,6 +177,9 @@ async fn test_gdma_restore(driver: DefaultDriver) {
     let original_device = EmulatedDevice::new(device, msi_set, mem.clone());
 
     let mut gdma = GdmaDriver::new(&driver, original_device, 1).await.unwrap();
+
+    gdma.test_eq().await.unwrap();
+
     let saved_gdma_state = gdma.save().await.unwrap();
 
     let mut new_msi_set = MsiInterruptSet::new();

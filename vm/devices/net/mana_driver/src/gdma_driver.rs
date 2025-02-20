@@ -137,6 +137,12 @@ pub struct GdmaDriverSavedState {
     pub cq_armed: bool,
     #[mesh(12)]
     pub eq_id_msix: HashMap<u32, u32>,
+    #[mesh(13)]
+    pub hwc_activity_id: u32,
+    #[mesh(14)]
+    pub num_msix: u32,
+    #[mesh(15)]
+    pub min_queue_avail: u32,
 }
 
 impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
@@ -159,7 +165,10 @@ impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
     }
 
     fn save(&self) -> DoorbellSavedState {
-        DoorbellSavedState {}
+        DoorbellSavedState {
+            doorbell_id: todo!(),
+            page_count: todo!(),
+        }
     }
 }
 
@@ -545,16 +554,15 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         mut device: T,
         num_vps: u32,
     ) -> anyhow::Result<Self> {
-        tracing::info!("starting GDMA restore");
+        tracing::info!("restoring gdma driver from saved state");
 
         let bar0_mapping = device.map_bar(0)?;
         let bar0_len = bar0_mapping.len();
         if bar0_len < size_of::<RegMap>() {
             anyhow::bail!("bar0 ({} bytes) too small for reg map", bar0_mapping.len());
         }
-        // Only allocate the HWC interrupt now. Rest will be allocated later.
-        let num_msix = 1;
-        let interrupt0 = device.map_interrupt(0, 0)?;
+
+        let mut interrupt0 = device.map_interrupt(0, 0)?;
         let mut map = RegMap::new_zeroed();
         for i in 0..size_of_val(&map) / 4 {
             let v = bar0_mapping.read_u32(i * 4);
@@ -566,7 +574,22 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             map.as_mut_bytes()[i * 4..(i + 1) * 4].copy_from_slice(&v.to_ne_bytes());
         }
 
-        tracing::debug!(?map, "register map");
+        tracing::debug!(?map, "register map on restore");
+
+        // Verify HWC channel is still active by reading shared memory region
+        let shmem_data = bar0_mapping.read_u32(map.vf_gdma_sriov_shared_reg_start as usize + 28);
+        if shmem_data == u32::MAX {
+            anyhow::bail!("Device no longer present");
+        }
+
+        let header = SmcProtoHdr::from(shmem_data);
+        if header.owner_is_pf() {
+            tracing::warn!("HWC channel appears inactive, device owns shared memory");
+            // Consider re-establishing HWC here if needed
+            anyhow::bail!("HWC channel not active");
+        } else {
+            tracing::info!("HWC channel appears active");
+        }
 
         // Log on unknown major version numbers. This is not necessarily an
         // error, so continue.
@@ -597,68 +620,12 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         }
 
         let dma_client = device.dma_client();
+        tracing::info!("restoring gdma DMA buffer: {:?}", saved_state.mem);
         let dma_buffer =
             dma_client.attach_dma_buffer(saved_state.mem.len, saved_state.mem.base_pfn)?;
+
         let pages = dma_buffer.pfns();
-
-        // Write the shared memory.
-        fn low(n: u64) -> [u8; 6] {
-            let n = n.to_ne_bytes();
-            [n[0], n[1], n[2], n[3], n[4], n[5]]
-        }
-
-        let high = ((pages[EQ_PAGE] >> 48) & 0xf)
-            | ((pages[CQ_PAGE] >> 44) & 0xf0)
-            | ((pages[RQ_PAGE] >> 40) & 0xf00)
-            | ((pages[SQ_PAGE] >> 36) & 0xf000);
-
-        let establish = EstablishHwc {
-            eq: low(pages[EQ_PAGE]),
-            cq: low(pages[CQ_PAGE]),
-            rq: low(pages[RQ_PAGE]),
-            sq: low(pages[SQ_PAGE]),
-            high: high as u16,
-            msix: 0,
-            hdr: SmcProtoHdr::new()
-                .with_msg_type(SmcMessageType::SMC_MSG_TYPE_ESTABLISH_HWC.0)
-                .with_msg_version(SMC_MSG_TYPE_ESTABLISH_HWC_VERSION),
-        };
-
-        tracing::info!(eq = ?establish.eq, "re-establishing eq");
-
-        let shmem = <[u32]>::ref_from_bytes(establish.as_bytes()).unwrap();
-        assert!(shmem.len() == 8);
-        for (i, &n) in shmem.iter().enumerate() {
-            bar0_mapping.write_u32(map.vf_gdma_sriov_shared_reg_start as usize + i * 4, n);
-        }
-
-        // Wait for the device to respond.
-        let mut backoff = Backoff::new(driver);
-        let mut ctx =
-            mesh::CancelContext::new().with_timeout(Duration::from_millis(HWC_POLL_TIMEOUT_IN_MS));
-        let mut hw_failure = false;
-        let header = loop {
-            let header = SmcProtoHdr::from(
-                bar0_mapping.read_u32(map.vf_gdma_sriov_shared_reg_start as usize + 28),
-            );
-            if !header.owner_is_pf() {
-                break header;
-            }
-            if hw_failure {
-                anyhow::bail!("MANA request timed out. SMC_MSG_TYPE_ESTABLISH_HWC");
-            }
-            hw_failure = matches!(
-                ctx.until_cancelled(backoff.back_off()).await,
-                Err(mesh::CancelReason::DeadlineExceeded)
-            );
-        };
-
-        if !header.is_response() {
-            anyhow::bail!("expected response");
-        }
-        if header.status() != 0 {
-            anyhow::bail!("establish failed: {}", header.status());
-        }
+        tracing::info!("restored pages: {:?}", pages);
 
         let doorbell_shift = map.vf_db_page_sz.trailing_zeros();
         let bar0 = Arc::new(Bar0 {
@@ -674,9 +641,6 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         )?;
 
         let db_id = saved_state.db_id;
-        let gpa_mkey = saved_state.gpa_mkey;
-        let pdid = saved_state.pdid;
-
         let cq = Cq::restore(
             dma_buffer.subblock(CQ_PAGE * PAGE_SIZE, PAGE_SIZE),
             saved_state.cq,
@@ -695,57 +659,31 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             DoorbellPage::new(bar0.clone(), db_id)?,
         )?;
 
-        // To make debugging from the device side easier, randomize the upper
-        // 16 bits of the ActivityId, so that requests can be distinguished.
-        let mut rand_activity_id = [0_u8; 2];
-        getrandom::getrandom(&mut rand_activity_id).unwrap();
-        let hwc_activity_id = (u16::from_ne_bytes(rand_activity_id) as u32) << 16;
-        let mut this = Self {
+        Ok(Self {
             device: Some(device),
             bar0,
             dma_buffer,
+            interrupts: vec![Some(interrupt0)], // Revisit: is this right?
             eq,
             cq,
             rq,
             sq,
-            interrupts: vec![Some(interrupt0)],
             test_events: 0,
             eq_armed: saved_state.eq_armed,
             cq_armed: saved_state.cq_armed,
-            gpa_mkey,
-            _pdid: pdid,
+            gpa_mkey: saved_state.gpa_mkey,
+            _pdid: saved_state.pdid,
             eq_id_msix: saved_state.eq_id_msix,
-            num_msix,
-            min_queue_avail: 0,
-            hwc_activity_id,
-            link_toggle: Vec::new(),
+            num_msix: saved_state.num_msix,
+            min_queue_avail: saved_state.min_queue_avail,
+            hwc_activity_id: saved_state.hwc_activity_id,
+            link_toggle: Vec::new(), // Revisit: is this right?
             hwc_subscribed: saved_state.hwc_subscribed,
             hwc_warning_time_in_ms: HWC_WARNING_TIME_IN_MS,
             hwc_timeout_in_ms: HWC_TIMEOUT_DEFAULT_IN_MS,
             hwc_failure: false,
             db_id,
-        };
-
-        this.push_rqe();
-
-        let max_vf_resources = this
-            .query_max_resources()
-            .await
-            .context("query_max_resources")?;
-        tracing::info!("Max VF resources: {:?}", max_vf_resources);
-
-        let device = this.device.as_mut().expect("device should be present");
-        let num_msix = num_vps
-            .min(max_vf_resources.max_msix)
-            .min(device.max_interrupt_count());
-        this.interrupts.resize_with(num_msix as usize, || None);
-        this.num_msix = num_msix;
-        this.min_queue_avail = max_vf_resources
-            .max_eq
-            .min(max_vf_resources.max_sq)
-            .min(max_vf_resources.max_rq);
-
-        Ok(this)
+        })
     }
 
     pub async fn save(&mut self) -> anyhow::Result<GdmaDriverSavedState> {
@@ -771,6 +709,9 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             eq_armed: self.eq_armed,
             hwc_subscribed: self.hwc_subscribed,
             eq_id_msix: self.eq_id_msix.clone(),
+            hwc_activity_id: self.hwc_activity_id,
+            num_msix: self.num_msix,
+            min_queue_avail: self.min_queue_avail,
         });
     }
 
@@ -979,6 +920,17 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             let req_phys_addr = self.dma_buffer.pfns()[REQUEST_PAGE] * PAGE_SIZE64;
             let sgl_phys_addr = self.dma_buffer.pfns()[SQ_PAGE] * PAGE_SIZE64;
             let mem_key = self.gpa_mkey;
+            let cq_wait_success = || {
+                tracing::info!(
+                    "HWC request successful. request={:#x}, activity_id={:#x}, queue_phys_addr={:#x}, req_phys_addr={:#x}, write_size={}, mem_key={:#x}",
+                    req_msg_type,
+                    hdr.activity_id,
+                    sgl_phys_addr,
+                    req_phys_addr,
+                    size_of_val(&hdr) + size_of_val(&req),
+                    mem_key,
+                );
+            };
             let cq_wait_context = || {
                 format!(
                     "HWC request failed. request={:#x}, activity_id={:#x}, queue_phys_addr={:#x}, req_phys_addr={:#x}, write_size={}, mem_key={:#x}",
@@ -990,8 +942,12 @@ impl<T: DeviceBacking> GdmaDriver<T> {
                     mem_key,
                 )
             };
-            self.wait_cq().await.with_context(cq_wait_context)?;
-            self.wait_cq().await.with_context(cq_wait_context)?;
+            self.wait_cq(cq_wait_success)
+                .await
+                .with_context(cq_wait_context)?;
+            self.wait_cq(cq_wait_success)
+                .await
+                .with_context(cq_wait_context)?;
             self.sq.advance_head(sqe_len);
             self.rq.advance_head(RWQE_SIZE);
             self.push_rqe();
@@ -1182,10 +1138,11 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         }
     }
 
-    async fn wait_cq(&mut self) -> anyhow::Result<Cqe> {
+    async fn wait_cq(&mut self, f: impl Fn() -> ()) -> anyhow::Result<Cqe> {
         loop {
             if let Some(cqe) = self.cq.pop() {
                 self.cq_armed = false;
+                f();
                 return Ok(cqe);
             }
             if !self.cq_armed {

@@ -35,7 +35,12 @@ use zerocopy::KnownLayout;
 
 #[derive(Clone, Protobuf, Debug)]
 #[mesh(package = "underhill")]
-pub struct DoorbellSavedState {}
+pub struct DoorbellSavedState {
+    #[mesh(1)]
+    pub doorbell_id: u32,
+    #[mesh(2)]
+    pub page_count: u32,
+}
 
 /// An interface to write a doorbell value to signal the device.
 pub trait Doorbell: Send + Sync {
@@ -56,7 +61,10 @@ impl Doorbell for NullDoorbell {
     fn write(&self, _page: u32, _address: u32, _value: u64) {}
 
     fn save(&self) -> DoorbellSavedState {
-        DoorbellSavedState {}
+        DoorbellSavedState {
+            page_count: 0,
+            doorbell_id: 0,
+        }
     }
 }
 
@@ -218,7 +226,10 @@ impl<T: IntoBytes + FromBytes + Immutable + KnownLayout> CqEq<T> {
     pub(crate) fn save(&self) -> CqEqSavedState {
         tracing::info!("Saving queue state: ");
         let state = CqEqSavedState {
-            doorbell: DoorbellSavedState {},
+            doorbell: DoorbellSavedState {
+                doorbell_id: self.doorbell.doorbell_id,
+                page_count: self.doorbell.doorbell.page_count(),
+            },
             doorbell_addr: self.doorbell_addr,
             mem: self.mem.save(),
             id: self.id,
@@ -426,7 +437,10 @@ impl Wq {
 
     pub fn save(&self) -> WqSavedState {
         WqSavedState {
-            doorbell: DoorbellSavedState {},
+            doorbell: DoorbellSavedState {
+                doorbell_id: self.doorbell.doorbell_id,
+                page_count: self.doorbell.doorbell.page_count(),
+            },
             doorbell_addr: self.doorbell_addr,
             mem: self.mem.save(),
             id: self.id,
