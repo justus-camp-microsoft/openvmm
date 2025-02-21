@@ -95,6 +95,7 @@ debug_ptr = { path = "support/debug_ptr" }
 fast_select = { path = "support/fast_select" }
 fdt = { path = "support/fdt" }
 guid = { path = "support/guid" }
+headervec = { path = "support/headervec" }
 inspect = { path = "support/inspect", default-features = false, features = ["derive"] }
 inspect_counters = { path = "support/inspect_counters" }
 inspect_derive = { path = "support/inspect_derive" }
@@ -318,8 +319,8 @@ vmbus_server = { path = "vm/devices/vmbus/vmbus_server" }
 vmbus_user_channel = { path = "vm/devices/vmbus/vmbus_user_channel" }
 hv1_emulator = { path = "vm/hv1/hv1_emulator" }
 hv1_hypercall = { path = "vm/hv1/hv1_hypercall" }
+hv1_structs = { path = "vm/hv1/hv1_structs" }
 hvdef = { path = "vm/hv1/hvdef" }
-vtl_array = { path = "vm/hv1/vtl_array" }
 vhd1_defs = { path = "vm/vhd1_defs" }
 kvm = { path = "vm/kvm" }
 loader = { path = "vm/loader" }
@@ -407,7 +408,7 @@ filepath = "0.1"
 fs-err = "2.9"
 fscommon = "0.1.1"
 futures = "0.3.31"
-futures-concurrency = "7.2.1"
+futures-concurrency = "7.6.3"
 futures-executor = "0.3"
 futures-core = "0.3"
 futures-channel = "0.3"
@@ -467,7 +468,7 @@ pbjson = "0.5"
 pbjson-build = "0.5"
 pbjson-types = "0.5"
 pcap-file = "2.0.0"
-petgraph = "0.6.4"
+petgraph = "0.7.1"
 proc-macro2 = "1.0"
 prost = "0.11"
 prost-build = "0.11"
@@ -516,7 +517,7 @@ which = "6"
 widestring = "1.0"
 win_etw_tracing = "0.1"
 winapi = "0.3"
-windows = "0.56"
+windows = "0.59"
 windows-service = "0.7"
 windows-sys = "0.52"
 xshell = "=0.2.2" # pin to 0.2.2 to work around https://github.com/matklad/xshell/issues/63
@@ -625,6 +626,9 @@ string_to_string = "warn"
 suboptimal_flops = "warn"
 undocumented_unsafe_blocks = "warn"
 unnecessary_box_returns = "warn"
+
+# TODO: Remove this allow in Rust 1.86. See https://github.com/rust-lang/rust-clippy/pull/14115.
+precedence = "allow"
 
 # Possible future additions:
 #

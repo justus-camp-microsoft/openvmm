@@ -316,7 +316,7 @@ pub struct UnderhillRemoteConsoleCfg {
     pub synth_keyboard: bool,
     pub synth_mouse: bool,
     pub synth_video: bool,
-    pub input: mesh::MpscReceiver<InputData>,
+    pub input: mesh::Receiver<InputData>,
     pub framebuffer: Option<framebuffer::Framebuffer>,
 }
 
@@ -428,7 +428,7 @@ impl Worker for UnderhillVmWorker {
                     synth_keyboard: false,
                     synth_mouse: false,
                     synth_video: false,
-                    input: mesh::MpscReceiver::new(),
+                    input: mesh::Receiver::new(),
                     framebuffer: None,
                 },
                 debugger_rpc: None,
@@ -1524,13 +1524,15 @@ async fn new_underhill_vm(
     let mut shared_vis_pages_pool = if shared_pool_size != 0 {
         use vmcore::save_restore::SaveRestore;
 
-        let mut pool = PagePool::new_shared_visibility_pool(
-            &shared_pool,
-            measured_vtl2_info
-                .vtom_offset_bit
-                .map(|bit| 1 << bit)
-                .unwrap_or(0),
-            HclMapper::new().context("failed to create hcl mapper")?,
+        let mut pool = PagePool::new(
+            &shared_pool.iter().map(|r| r.range).collect::<Vec<_>>(),
+            HclMapper::new_shared(
+                measured_vtl2_info
+                    .vtom_offset_bit
+                    .map(|bit| 1 << bit)
+                    .unwrap_or(0),
+            )
+            .context("failed to create hcl mapper")?,
         )
         .context("failed to create shared vis page pool")?;
 
@@ -1557,9 +1559,9 @@ async fn new_underhill_vm(
         use vmcore::save_restore::SaveRestore;
 
         let ranges = runtime_params.private_pool_ranges();
-        let mut pool = PagePool::new_private_pool(
-            ranges,
-            HclMapper::new().context("failed to create hcl mapper")?,
+        let mut pool = PagePool::new(
+            &ranges.iter().map(|r| r.range).collect::<Vec<_>>(),
+            HclMapper::new_private().context("failed to create hcl mapper")?,
         )
         .context("failed to create private pool")?;
 
@@ -1829,7 +1831,7 @@ async fn new_underhill_vm(
     if env_cfg.mcr {
         use crate::dispatch::vtl2_settings_worker::UhVpciDeviceConfig;
         tracing::info!("Instantiating The MCR Device");
-        const MCR_INSTANCE_ID: Guid = Guid::from_static_str("07effd8f-7501-426c-a947-d8345f39113d");
+        const MCR_INSTANCE_ID: Guid = guid::guid!("07effd8f-7501-426c-a947-d8345f39113d");
 
         let res = UhVpciDeviceConfig {
             instance_id: MCR_INSTANCE_ID,
@@ -2896,7 +2898,7 @@ async fn new_underhill_vm(
     if let Some(framebuffer) = remote_console_cfg.framebuffer {
         resolver.add_resolver(FramebufferRemoteControl {
             get: get_client.clone(),
-            format_send: Arc::new(framebuffer.format_send()),
+            format_send: framebuffer.format_send(),
         });
 
         vmbus_device_handles.push(

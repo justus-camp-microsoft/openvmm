@@ -10,6 +10,7 @@ use hcl::ioctl::ProcessorRunner;
 use hcl::GuestVtl;
 use hvdef::hypercall::HvGvaRange;
 use inspect::Inspect;
+use safeatomic::AtomicSliceOps;
 use std::collections::VecDeque;
 use std::num::Wrapping;
 use x86defs::tdx::TdGlaVmAndFlags;
@@ -125,7 +126,7 @@ impl UhProcessor<'_, TdxBacked> {
         target_vtl: GuestVtl,
         partition_flush_state: &TdxPartitionFlushState,
         gva_list_count: &mut Wrapping<usize>,
-        runner: &mut ProcessorRunner<'_, Tdx>,
+        runner: &mut ProcessorRunner<'_, Tdx<'_>>,
         flush_page: &page_pool_alloc::PagePoolHandle,
     ) -> bool {
         // Check quickly to see whether any new addresses are in the list.
@@ -156,12 +157,13 @@ impl UhProcessor<'_, TdxBacked> {
         } else {
             gla_flags.set_list(true);
 
-            let page_mapping = flush_page.mapping().unwrap();
+            let page_mapping = flush_page.mapping();
 
-            for (i, gva_range) in flush_addrs.enumerate() {
-                page_mapping
-                    .write_at(i * size_of::<HvGvaRange>(), gva_range.as_bytes())
-                    .unwrap();
+            for (d, s) in page_mapping
+                .chunks(size_of::<HvGvaRange>())
+                .zip(flush_addrs)
+            {
+                d.atomic_write(s.as_bytes());
             }
 
             let gla_list = TdxGlaListInfo::new()
