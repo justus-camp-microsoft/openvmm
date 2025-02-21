@@ -142,7 +142,7 @@ pub mod transposed {
         pub firmware_type: Option<Firmware>,
         pub vm_stop_reference_time: Option<u64>,
         pub emuplat: OptionEmuplatSavedState,
-        pub mana_state: Option<Option<Vec<ManaDeviceSavedState>>>,
+        pub mana_state: Option<Vec<ManaDeviceSavedState>>,
         pub flush_logs_result: Option<Option<FlushLogsResult>>,
         pub vmgs: Option<(
             vmgs::save_restore::state::SavedVmgsState,
@@ -197,7 +197,7 @@ pub mod transposed {
                     vmgs: Some(vmgs),
                     overlay_shutdown_device: Some(overlay_shutdown_device),
                     nvme_state: Some(nvme_state),
-                    mana_state: Some(mana_state),
+                    mana_state,
                     shared_pool_state: Some(shared_pool_state),
                     private_pool_state: Some(private_pool_state),
                 }

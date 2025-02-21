@@ -68,6 +68,7 @@ async fn create_mana_device(
     vp_count: u32,
     max_sub_channels: u16,
     dma_client: Arc<dyn DmaClient>,
+    mana_state: Option<ManaDeviceSavedState>,
 ) -> anyhow::Result<ManaDevice<VfioDevice>> {
     // Disable FLR on vfio attach/detach; this allows faster system
     // startup/shutdown with the caveat that the device needs to be properly
@@ -92,6 +93,7 @@ async fn create_mana_device(
             vp_count,
             max_sub_channels,
             dma_client.clone(),
+            mana_state.clone(),
         )
         .await
         {
@@ -121,6 +123,7 @@ async fn try_create_mana_device(
     vp_count: u32,
     max_sub_channels: u16,
     dma_client: Arc<dyn DmaClient>,
+    mana_state: Option<ManaDeviceSavedState>,
 ) -> anyhow::Result<ManaDevice<VfioDevice>> {
     let device = VfioDevice::new(driver_source, pci_id, dma_client)
         .await
@@ -131,6 +134,7 @@ async fn try_create_mana_device(
         device,
         vp_count,
         max_sub_channels + 1,
+        mana_state,
     )
     .instrument(tracing::info_span!("new_mana_device"))
     .await
@@ -701,6 +705,7 @@ impl HclNetworkVFManagerWorker {
                         self.vp_count,
                         self.max_sub_channels,
                         self.dma_client.clone(),
+                        None,
                     )
                     .await
                     {
@@ -883,12 +888,21 @@ impl HclNetworkVFManager {
         Vec<HclNetworkVFManagerEndpointInfo>,
         RuntimeSavedState,
     )> {
+        tracing::info!("creating mana device. mana_state: {:?}", mana_state);
+
+        let mana_state = if let Some(mana_state) = mana_state {
+            Some(mana_state[0].clone())
+        } else {
+            None
+        };
+
         let device = create_mana_device(
             driver_source,
             &vtl2_pci_id,
             vp_count,
             max_sub_channels,
             dma_client.clone(),
+            mana_state,
         )
         .await?;
         let (mut endpoints, endpoint_controls): (Vec<_>, Vec<_>) = (0..device.num_vports())

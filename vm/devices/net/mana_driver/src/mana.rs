@@ -85,8 +85,16 @@ impl<T: DeviceBacking> ManaDevice<T> {
         device: T,
         num_vps: u32,
         max_queues_per_vport: u16,
+        mana_state: Option<ManaDeviceSavedState>,
     ) -> anyhow::Result<Self> {
-        let mut gdma = GdmaDriver::new(driver, device, num_vps).await?;
+        let mut gdma = if let Some(mana_state) = mana_state {
+            tracing::info!("Restoring gdma driver from saved state");
+            GdmaDriver::restore(mana_state.gdma, driver, device, num_vps).await?
+        } else {
+            tracing::info!("Creating a new gdma driver");
+            GdmaDriver::new(driver, device, num_vps).await?
+        };
+
         gdma.test_eq().await?;
 
         gdma.verify_vf_driver_version().await?;

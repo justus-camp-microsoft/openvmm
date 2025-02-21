@@ -1895,7 +1895,7 @@ async fn new_underhill_vm(
 
     let vfio_dma_buffer_spawner = Box::new(
         move |device_id: String| -> anyhow::Result<Arc<dyn DmaClient>> {
-            shared_vis_pool_spawner
+            let spawner = shared_vis_pool_spawner
                 .as_ref()
                 .map(|spawner| {
                     spawner
@@ -1903,6 +1903,10 @@ async fn new_underhill_vm(
                         .map(|alloc| Arc::new(alloc) as _)
                 })
                 .unwrap_or_else(|| {
+                    tracing::info!(
+                        "Unable to use shared vis pool spawner, trying to use private pool spawner",
+                    );
+
                     private_pool_spanwer
                         .as_ref()
                         .map(|spawner| {
@@ -1910,8 +1914,16 @@ async fn new_underhill_vm(
                                 .allocator(device_id.clone())
                                 .map(|alloc| Arc::new(alloc) as _)
                         })
-                        .unwrap_or(Ok(Arc::new(LockedMemorySpawner) as _))
-                })
+                        .unwrap_or_else(|| {
+                            tracing::info!(
+                                "Unable to use private pool spawner, using locked memory spawner",
+                            );
+
+                            Ok(Arc::new(LockedMemorySpawner) as _)
+                        })
+                });
+
+            spawner
         },
     );
 
@@ -2867,7 +2879,7 @@ async fn new_underhill_vm(
                     tp,
                     &uevent_listener,
                     &servicing_state.emuplat.netvsp_state,
-                    &None,
+                    &servicing_state.mana_state,
                     partition.clone(),
                     &state_units,
                     &vmbus_server,
