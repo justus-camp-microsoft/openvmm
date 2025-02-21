@@ -19,6 +19,8 @@ async fn openhcl_servicing_core(
 ) -> anyhow::Result<()> {
     let (mut vm, agent) = config
         .with_openhcl_command_line(openhcl_cmdline)
+        .with_vmbus_redirect()
+        .with_nic()
         .run()
         .await?;
 
