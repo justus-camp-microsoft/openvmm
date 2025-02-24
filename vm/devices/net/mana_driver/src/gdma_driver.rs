@@ -115,6 +115,15 @@ pub struct SavedMemoryState {
 
 #[derive(Protobuf, Clone, Debug)]
 #[mesh(package = "underhill")]
+pub struct InterruptSavedState {
+    #[mesh(1)]
+    pub msix_index: u32,
+    #[mesh(2)]
+    pub cpu: u32,
+}
+
+#[derive(Protobuf, Clone, Debug)]
+#[mesh(package = "underhill")]
 pub struct GdmaDriverSavedState {
     #[mesh(1)]
     pub mem: SavedMemoryState,
@@ -146,6 +155,8 @@ pub struct GdmaDriverSavedState {
     pub num_msix: u32,
     #[mesh(15)]
     pub min_queue_avail: u32,
+    #[mesh(16)]
+    pub interrupt_config: Vec<InterruptSavedState>,
 }
 
 impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
@@ -626,11 +637,23 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             DoorbellPage::new(bar0.clone(), db_id)?,
         )?;
 
+        let mut interrupts = vec![None; saved_state.num_msix as usize];
+        for int_state in &saved_state.interrupt_config {
+            tracing::info!(
+                "Restoring interrupt at index {:?} and on cpu {:?}",
+                int_state.msix_index,
+                int_state.cpu
+            );
+            let interrupt = device.map_interrupt(int_state.msix_index, int_state.cpu)?;
+
+            interrupts[int_state.msix_index as usize] = Some(interrupt);
+        }
+
         let mut this = Self {
             device: Some(device),
             bar0,
             dma_buffer,
-            interrupts: vec![Some(interrupt0)], // Revisit: is this right?
+            interrupts, // Revisit: is this right?
             eq,
             cq,
             rq,
@@ -652,6 +675,10 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             db_id,
         };
 
+        if saved_state.hwc_subscribed {
+            this.hwc_subscribe();
+        }
+
         if saved_state.eq_armed {
             this.eq.arm();
         }
@@ -669,6 +696,22 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             self.dma_buffer.pfns()[0],
             self.dma_buffer.len()
         );
+
+        tracing::info!(
+            "saving gdma interrupts state. count: {}, active: {}",
+            self.interrupts.len(),
+            self.interrupts.iter().filter(|i| i.is_some()).count()
+        );
+
+        let mut interrupt_config = Vec::new();
+        for (index, interrupt) in self.interrupts.iter().enumerate() {
+            if let Some(_) = interrupt {
+                interrupt_config.push(InterruptSavedState {
+                    msix_index: index as u32,
+                    cpu: index as u32,
+                });
+            }
+        }
 
         return Ok(GdmaDriverSavedState {
             mem: SavedMemoryState {
@@ -689,6 +732,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             hwc_activity_id: self.hwc_activity_id,
             num_msix: self.num_msix,
             min_queue_avail: self.min_queue_avail,
+            interrupt_config,
         });
     }
 
@@ -1226,6 +1270,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
                 )
             })?;
         }
+
         Ok(())
     }
 

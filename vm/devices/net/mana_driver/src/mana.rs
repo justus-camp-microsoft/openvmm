@@ -107,6 +107,8 @@ impl<T: DeviceBacking> ManaDevice<T> {
             .find(|dev_id| dev_id.ty == GdmaDevType::GDMA_DEVICE_MANA)
             .context("no mana device found")?;
 
+        tracing::info!("registering device in mana driver");
+
         let dev_data = gdma.register_device(dev_id).await?;
 
         let mut bnic = BnicDriver::new(&mut gdma, dev_id);

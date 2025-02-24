@@ -402,6 +402,7 @@ impl PagePoolHandle {
     /// Create a memory block from this allocation.
     fn into_memory_block(self) -> anyhow::Result<user_driver::memory::MemoryBlock> {
         let pfns: Vec<_> = (self.base_pfn()..self.base_pfn() + self.size_pages).collect();
+        tracing::info!("PagePoolHandle: returning memory block: {:?}", self);
         Ok(user_driver::memory::MemoryBlock::new(PagePoolDmaBuffer {
             alloc: self,
             pfns,
@@ -680,8 +681,13 @@ impl PagePoolAllocator {
                     }
                 }
                 None => {
-                    inner.device_ids.push(DeviceId::Used(device_name));
+                    inner.device_ids.push(DeviceId::Used(device_name.clone()));
                     device_id = inner.device_ids.len() - 1;
+                    tracing::info!(
+                        "creating new page pool allocator for device: {:?} deviceId: {:?}",
+                        device_name,
+                        device_id
+                    );
                 }
             }
         }
@@ -788,6 +794,12 @@ impl PagePoolAllocator {
                         && slot.base_pfn == base_pfn
                         && slot.size_pages == size_pages
                 } else {
+                    tracing::info!(
+                        "failed to find matching allocation for device_id: {:?}, {:?}",
+                        self.device_id,
+                        slot.state,
+                    );
+
                     false
                 }
             })
@@ -830,6 +842,11 @@ impl user_driver::DmaClient for PagePoolAllocator {
             .alloc(size_pages, "vfio dma".into())
             .context("failed to allocate shared mem")?;
 
+        tracing::info!(
+            "PagePoolAllocator: allocated dma buffer for {:?}",
+            self.device_id
+        );
+
         // The VfioDmaBuffer trait requires that newly allocated buffers are
         // zeroed.
         alloc.mapping().atomic_fill(0);
@@ -849,6 +866,11 @@ impl user_driver::DmaClient for PagePoolAllocator {
 
         let size_pages = NonZeroU64::new(len as u64 / PAGE_SIZE)
             .context("allocation of size 0 not supported")?;
+
+        tracing::info!(
+            "PagePoolAllocator: attaching dma buffer for {:?}",
+            self.device_id
+        );
 
         let alloc = self
             .restore_alloc(base_pfn, size_pages)

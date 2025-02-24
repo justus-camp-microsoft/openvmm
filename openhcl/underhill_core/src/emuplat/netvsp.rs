@@ -70,6 +70,19 @@ async fn create_mana_device(
     dma_client: Arc<dyn DmaClient>,
     mana_state: Option<ManaDeviceSavedState>,
 ) -> anyhow::Result<ManaDevice<VfioDevice>> {
+    // Don't do anything to the device in servicing mode
+    if let Some(mana_state) = mana_state {
+        return try_create_mana_device(
+            driver_source,
+            pci_id,
+            vp_count,
+            max_sub_channels,
+            dma_client.clone(),
+            Some(mana_state.clone()),
+        )
+        .await;
+    }
+
     // Disable FLR on vfio attach/detach; this allows faster system
     // startup/shutdown with the caveat that the device needs to be properly
     // sent through the shutdown path during servicing operations, as that is
@@ -125,9 +138,19 @@ async fn try_create_mana_device(
     dma_client: Arc<dyn DmaClient>,
     mana_state: Option<ManaDeviceSavedState>,
 ) -> anyhow::Result<ManaDevice<VfioDevice>> {
-    let device = VfioDevice::new(driver_source, pci_id, dma_client)
-        .await
-        .context("failed to open device")?;
+    let device = if mana_state.is_some() {
+        tracing::info!("restoring mana vfio device with pci_id {:?}", pci_id);
+        VfioDevice::restore(driver_source, pci_id, true, dma_client)
+            .await
+            .context("failed to restore device")?
+    } else {
+        tracing::info!("creating mana vfio device with pci_id {:?}", pci_id);
+        VfioDevice::new(driver_source, pci_id, dma_client)
+            .await
+            .context("failed to open device")?
+    };
+
+    tracing::info!("successfully got mana vfio device");
 
     ManaDevice::new(
         &driver_source.simple(),
