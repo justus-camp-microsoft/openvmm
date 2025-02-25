@@ -31,7 +31,7 @@ use vmcore::vm_task::VmTaskDriverSource;
 async fn test_gdma(driver: DefaultDriver) {
     let mem = DeviceSharedMemory::new(256 * 1024, 0);
     let mut msi_set = MsiInterruptSet::new();
-    let device = gdma::GdmaDevice::new(
+    let device = GdmaDevice::new(
         &VmTaskDriverSource::new(SingleDriverBackend::new(driver.clone())),
         mem.guest_memory().clone(),
         &mut msi_set,
@@ -195,7 +195,7 @@ async fn test_gdma_restore(driver: DefaultDriver) {
     );
 
     let new_device = EmulatedDevice::new(new_device, new_msi_set, mem.clone());
-    let mut restored_gdma = GdmaDriver::restore(saved_gdma_state, &driver, new_device, 1)
+    let mut restored_gdma = GdmaDriver::restore(saved_gdma_state, new_device)
         .await
         .unwrap();
 

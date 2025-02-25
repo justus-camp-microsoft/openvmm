@@ -60,7 +60,7 @@ impl Doorbell for NullDoorbell {
 
     fn write(&self, _page: u32, _address: u32, _value: u64) {}
 
-    fn save(&self, db_id: Option<u64>) -> DoorbellSavedState {
+    fn save(&self, _db_id: Option<u64>) -> DoorbellSavedState {
         DoorbellSavedState {
             page_count: 0,
             doorbell_id: 0,

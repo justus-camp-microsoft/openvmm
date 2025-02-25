@@ -66,7 +66,6 @@ use gdma_defs::HWC_INIT_DATA_GPA_MKEY;
 use gdma_defs::HWC_INIT_DATA_PDID;
 use gdma_defs::HWC_INIT_DATA_RQID;
 use gdma_defs::HWC_INIT_DATA_SQID;
-use gdma_defs::SMC_MSG_TYPE_DESTROY_HWC_VERSION;
 use gdma_defs::SMC_MSG_TYPE_ESTABLISH_HWC_VERSION;
 use gdma_defs::SMC_MSG_TYPE_REPORT_HWC_TIMEOUT_VERSION;
 use inspect::Inspect;
@@ -526,12 +525,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         Ok(this)
     }
 
-    pub async fn restore(
-        saved_state: GdmaDriverSavedState,
-        driver: &impl Driver,
-        mut device: T,
-        num_vps: u32,
-    ) -> anyhow::Result<Self> {
+    pub async fn restore(saved_state: GdmaDriverSavedState, mut device: T) -> anyhow::Result<Self> {
         tracing::info!("restoring gdma driver from saved state");
 
         let bar0_mapping = device.map_bar(0)?;
@@ -540,7 +534,6 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             anyhow::bail!("bar0 ({} bytes) too small for reg map", bar0_mapping.len());
         }
 
-        let mut interrupt0 = device.map_interrupt(0, 0)?;
         let mut map = RegMap::new_zeroed();
         for i in 0..size_of_val(&map) / 4 {
             let v = bar0_mapping.read_u32(i * 4);

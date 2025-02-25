@@ -89,7 +89,7 @@ impl<T: DeviceBacking> ManaDevice<T> {
     ) -> anyhow::Result<Self> {
         let mut gdma = if let Some(ref mana_state) = mana_state {
             tracing::info!("Restoring gdma driver from saved state");
-            GdmaDriver::restore(mana_state.gdma.clone(), driver, device, num_vps).await?
+            GdmaDriver::restore(mana_state.gdma.clone(), device).await?
         } else {
             tracing::info!("Creating a new gdma driver");
             GdmaDriver::new(driver, device, num_vps).await?
