@@ -87,9 +87,9 @@ impl<T: DeviceBacking> ManaDevice<T> {
         max_queues_per_vport: u16,
         mana_state: Option<ManaDeviceSavedState>,
     ) -> anyhow::Result<Self> {
-        let mut gdma = if let Some(mana_state) = mana_state {
+        let mut gdma = if let Some(ref mana_state) = mana_state {
             tracing::info!("Restoring gdma driver from saved state");
-            GdmaDriver::restore(mana_state.gdma, driver, device, num_vps).await?
+            GdmaDriver::restore(mana_state.gdma.clone(), driver, device, num_vps).await?
         } else {
             tracing::info!("Creating a new gdma driver");
             GdmaDriver::new(driver, device, num_vps).await?
@@ -109,7 +109,16 @@ impl<T: DeviceBacking> ManaDevice<T> {
 
         tracing::info!("registering device in mana driver");
 
-        let dev_data = gdma.register_device(dev_id).await?;
+        let dev_data = if let Some(mana_state) = mana_state {
+            tracing::info!("restoring device data from saved state");
+            GdmaRegisterDeviceResp {
+                pdid: mana_state.gdma.pdid,
+                gpa_mkey: mana_state.gdma.gpa_mkey,
+                db_id: mana_state.gdma.db_id as u32,
+            }
+        } else {
+            gdma.register_device(dev_id).await?
+        };
 
         let mut bnic = BnicDriver::new(&mut gdma, dev_id);
         let dev_config = bnic.query_dev_config().await?;

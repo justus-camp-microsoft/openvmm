@@ -136,7 +136,7 @@ pub struct GdmaDriverSavedState {
     #[mesh(5)]
     pub sq: WqSavedState,
     #[mesh(6)]
-    pub db_id: u32,
+    pub db_id: u64,
     #[mesh(7)]
     pub gpa_mkey: u32,
     #[mesh(8)]
@@ -178,10 +178,10 @@ impl<T: DeviceRegisterIo + Inspect> Doorbell for Bar0<T> {
         self.mem.write_u64(offset as usize, value);
     }
 
-    fn save(&self) -> DoorbellSavedState {
+    fn save(&self, doorbell_id: Option<u64>) -> DoorbellSavedState {
         DoorbellSavedState {
-            doorbell_id: todo!(),
-            page_count: todo!(),
+            doorbell_id: doorbell_id.unwrap(),
+            page_count: self.page_count(),
         }
     }
 }
@@ -612,29 +612,31 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             doorbell_shift,
         });
 
+        tracing::info!("Restoring doorbell state with db_id: {}", saved_state.db_id);
+
         let eq = Eq::restore(
             dma_buffer.subblock(0, PAGE_SIZE),
             saved_state.eq,
-            DoorbellPage::null(),
+            DoorbellPage::new(bar0.clone(), saved_state.db_id as u32)?,
         )?;
 
         let db_id = saved_state.db_id;
         let cq = Cq::restore(
             dma_buffer.subblock(CQ_PAGE * PAGE_SIZE, PAGE_SIZE),
             saved_state.cq,
-            DoorbellPage::new(bar0.clone(), db_id)?,
+            DoorbellPage::new(bar0.clone(), saved_state.db_id as u32)?,
         )?;
 
         let rq = Wq::restore_rq(
             dma_buffer.subblock(RQ_PAGE * PAGE_SIZE, PAGE_SIZE),
             saved_state.rq,
-            DoorbellPage::new(bar0.clone(), db_id)?,
+            DoorbellPage::new(bar0.clone(), saved_state.db_id as u32)?,
         )?;
 
         let sq = Wq::restore_sq(
             dma_buffer.subblock(SQ_PAGE * PAGE_SIZE, PAGE_SIZE),
             saved_state.sq,
-            DoorbellPage::new(bar0.clone(), db_id)?,
+            DoorbellPage::new(bar0.clone(), saved_state.db_id as u32)?,
         )?;
 
         let mut interrupts = vec![None; saved_state.num_msix as usize];
@@ -672,7 +674,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             hwc_warning_time_in_ms: HWC_WARNING_TIME_IN_MS,
             hwc_timeout_in_ms: HWC_TIMEOUT_DEFAULT_IN_MS,
             hwc_failure: false,
-            db_id,
+            db_id: db_id as u32,
         };
 
         if saved_state.hwc_subscribed {
@@ -703,6 +705,8 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             self.interrupts.iter().filter(|i| i.is_some()).count()
         );
 
+        let doorbell = self.bar0.save(Some(self.db_id as u64));
+
         let mut interrupt_config = Vec::new();
         for (index, interrupt) in self.interrupts.iter().enumerate() {
             if let Some(_) = interrupt {
@@ -722,7 +726,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             cq: self.cq.save(),
             rq: self.rq.save(),
             sq: self.sq.save(),
-            db_id: self.db_id,
+            db_id: doorbell.doorbell_id as u64,
             gpa_mkey: self.gpa_mkey,
             pdid: self._pdid,
             cq_armed: self.cq_armed,

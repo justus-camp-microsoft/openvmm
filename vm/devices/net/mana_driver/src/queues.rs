@@ -37,7 +37,7 @@ use zerocopy::KnownLayout;
 #[mesh(package = "underhill")]
 pub struct DoorbellSavedState {
     #[mesh(1)]
-    pub doorbell_id: u32,
+    pub doorbell_id: u64,
     #[mesh(2)]
     pub page_count: u32,
 }
@@ -48,7 +48,7 @@ pub trait Doorbell: Send + Sync {
     fn page_count(&self) -> u32;
     /// Write a doorbell value at page `page`, offset `address`.
     fn write(&self, page: u32, address: u32, value: u64);
-    fn save(&self) -> DoorbellSavedState;
+    fn save(&self, doorbell_id: Option<u64>) -> DoorbellSavedState;
 }
 
 struct NullDoorbell;
@@ -60,7 +60,7 @@ impl Doorbell for NullDoorbell {
 
     fn write(&self, _page: u32, _address: u32, _value: u64) {}
 
-    fn save(&self) -> DoorbellSavedState {
+    fn save(&self, db_id: Option<u64>) -> DoorbellSavedState {
         DoorbellSavedState {
             page_count: 0,
             doorbell_id: 0,
@@ -227,7 +227,7 @@ impl<T: IntoBytes + FromBytes + Immutable + KnownLayout> CqEq<T> {
         tracing::info!("Saving queue state: ");
         let state = CqEqSavedState {
             doorbell: DoorbellSavedState {
-                doorbell_id: self.doorbell.doorbell_id,
+                doorbell_id: self.doorbell.doorbell_id as u64,
                 page_count: self.doorbell.doorbell.page_count(),
             },
             doorbell_addr: self.doorbell_addr,
@@ -438,7 +438,7 @@ impl Wq {
     pub fn save(&self) -> WqSavedState {
         WqSavedState {
             doorbell: DoorbellSavedState {
-                doorbell_id: self.doorbell.doorbell_id,
+                doorbell_id: self.doorbell.doorbell_id as u64,
                 page_count: self.doorbell.doorbell.page_count(),
             },
             doorbell_addr: self.doorbell_addr,

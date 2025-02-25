@@ -3030,7 +3030,7 @@ async fn new_underhill_vm(
     // allocations.
     private_pool
         .as_mut()
-        .map(|pool| pool.validate_restore(false))
+        .map(|pool| pool.validate_restore(true))
         .transpose()
         .context("failed to validate restore for private pool")?;
 
