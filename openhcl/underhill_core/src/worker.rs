@@ -304,6 +304,8 @@ pub struct UnderhillEnvCfg {
     pub hide_isolation: bool,
     /// Enable nvme keep alive.
     pub nvme_keep_alive: bool,
+    /// Enable mana keep alive.
+    pub mana_keep_alive: bool,
 
     /// test configuration
     pub test_configuration: Option<TestScenarioConfig>,
@@ -975,13 +977,22 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
         Ok(params)
     }
 
-    async fn save(&mut self) -> Vec<Result<ManaDeviceSavedState, anyhow::Error>> {
-        join_all(
-            self.vf_managers
-                .values()
-                .map(|vf_manager| vf_manager.save()),
-        )
-        .await
+    async fn save(
+        &mut self,
+        mana_keepalive_flag: bool,
+    ) -> Option<Vec<Result<ManaDeviceSavedState, anyhow::Error>>> {
+        if mana_keepalive_flag {
+            Some(
+                join_all(
+                    self.vf_managers
+                        .values()
+                        .map(|vf_manager| vf_manager.save()),
+                )
+                .await,
+            )
+        } else {
+            None
+        }
     }
 }
 
@@ -3107,6 +3118,7 @@ async fn new_underhill_vm(
         shared_vis_pool: shared_vis_pages_pool,
         private_pool,
         nvme_keep_alive: env_cfg.nvme_keep_alive,
+        mana_keep_alive: env_cfg.mana_keep_alive,
         test_configuration: env_cfg.test_configuration,
         dma_manager,
     };

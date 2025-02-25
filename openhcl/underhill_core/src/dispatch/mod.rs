@@ -121,7 +121,10 @@ pub trait LoadedVmNetworkSettings: Inspect {
     /// Callback after stopping the VM and all workers, in preparation for a VTL2 reboot.
     async fn unload_for_servicing(&mut self);
 
-    async fn save(&mut self) -> Vec<Result<ManaDeviceSavedState, anyhow::Error>>;
+    async fn save(
+        &mut self,
+        mana_keepalive_flag: bool,
+    ) -> Option<Vec<Result<ManaDeviceSavedState, anyhow::Error>>>;
 
     /// Handles packet capture related operations.
     async fn packet_capture(
@@ -186,6 +189,7 @@ pub(crate) struct LoadedVm {
     pub shared_vis_pool: Option<PagePool>,
     pub private_pool: Option<PagePool>,
     pub nvme_keep_alive: bool,
+    pub mana_keep_alive: bool,
     pub test_configuration: Option<TestScenarioConfig>,
     pub dma_manager: GlobalDmaManager,
 }
@@ -273,7 +277,7 @@ impl LoadedVm {
                     WorkerRpc::Restart(rpc) => {
                         let state = async {
                             let running = self.stop().await;
-                            match self.save(None, false).await {
+                            match self.save(None, false, false).await {
                                 Ok(servicing_state) => Some((rpc, servicing_state)),
                                 Err(err) => {
                                     if running {
@@ -336,7 +340,7 @@ impl LoadedVm {
                     UhVmRpc::Save(rpc) => {
                         rpc.handle_failable(|()| async {
                             let running = self.stop().await;
-                            let r = self.save(None, false).await;
+                            let r = self.save(None, false, false).await;
                             if running {
                                 self.start(None).await;
                             }
@@ -500,6 +504,7 @@ impl LoadedVm {
         // NOTE: This is set via the corresponding env arg, as this feature is
         // experimental.
         let nvme_keepalive = self.nvme_keep_alive && capabilities_flags.enable_nvme_keepalive();
+        let mana_keepalive = self.mana_keep_alive && capabilities_flags.enable_mana_keepalive();
 
         // Do everything before the log flush under a span.
         let mut state = async {
@@ -514,7 +519,7 @@ impl LoadedVm {
                 anyhow::bail!("cannot service underhill while paused");
             }
 
-            let mut state = self.save(Some(deadline), nvme_keepalive).await?;
+            let mut state = self.save(Some(deadline), nvme_keepalive, mana_keepalive).await?;
             state.init_state.correlation_id = Some(correlation_id);
 
             // Unload any network devices.
@@ -643,7 +648,8 @@ impl LoadedVm {
     async fn save(
         &mut self,
         _deadline: Option<std::time::Instant>,
-        vf_keepalive_flag: bool,
+        nvme_keepalive_flag: bool,
+        mana_keepalive_flag: bool,
     ) -> anyhow::Result<ServicingState> {
         assert!(!self.state_units.is_running());
 
@@ -652,7 +658,7 @@ impl LoadedVm {
         // Only save NVMe state when there are NVMe controllers and keep alive
         // was enabled.
         let nvme_state = if let Some(n) = &self.nvme_manager {
-            n.save(vf_keepalive_flag)
+            n.save(nvme_keepalive_flag)
                 .instrument(tracing::info_span!("nvme_manager_save"))
                 .await
                 .map(|s| NvmeSavedState { nvme_state: s })
@@ -661,13 +667,15 @@ impl LoadedVm {
         };
 
         let mana_state = if let Some(network_settings) = &mut self.network_settings {
-            let results = network_settings.save().await;
+            let results = network_settings.save(mana_keepalive_flag).await;
             let mut saved_states = Vec::new();
 
-            for result in results {
-                match result {
-                    Ok(state) => saved_states.push(state),
-                    Err(e) => tracing::warn!("Error saving MANA device state: {:#}", e),
+            if let Some(results) = results {
+                for result in results {
+                    match result {
+                        Ok(state) => saved_states.push(state),
+                        Err(e) => tracing::warn!("Error saving MANA device state: {:#}", e),
+                    }
                 }
             }
 
@@ -694,7 +702,7 @@ impl LoadedVm {
         // Only save private pool state if we are expected to keep VF devices
         // alive across save. Otherwise, don't persist the state at all, as
         // there should be no live DMA across save.
-        let private_pool = if vf_keepalive_flag {
+        let private_pool = if nvme_keepalive_flag {
             self.private_pool
                 .as_mut()
                 .map(vmcore::save_restore::SaveRestore::save)
