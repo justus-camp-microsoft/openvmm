@@ -85,10 +85,7 @@ fn build_kernel_command_line(
         "printk.time=1",
         // Enable facility and level output on console for ohcldiag-dev.
         "console_msg_format=syslog",
-        // Set uio parameters to size and configure vmbus ring buffer behavior.
-        "uio_hv_generic.send_buf_size=0",
-        "uio_hv_generic.recv_buf_size=0",
-        "uio_hv_generic.ring_size=0x11000",
+        // Set uio parameter to configure vmbus ring buffer behavior.
         "uio_hv_generic.no_mask=1",
         // RELIABILITY: Dump anonymous pages and ELF headers only. Skip over
         // huge pages and the shared pages.
@@ -235,6 +232,7 @@ fn build_kernel_command_line(
     // TODO: Move from command line to device tree when stabilized.
     if partition_info.nvme_keepalive && !partition_info.vtl2_pool_memory.is_empty() {
         write!(cmdline, "OPENHCL_NVME_KEEP_ALIVE=1 ")?;
+        write!(cmdline, "OPENHCL_MANA_KEEP_ALIVE=1 ")?;
     }
 
     if let Some(sidecar) = sidecar {

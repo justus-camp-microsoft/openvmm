@@ -2362,18 +2362,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "get_lower_vtl"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "hcl",
- "hvdef",
- "inspect",
- "memory_range",
- "virt",
-]
-
-[[package]]
 name = "get_protocol"
 version = "0.0.0"
 dependencies = [
@@ -2692,6 +2680,7 @@ dependencies = [
 name = "hcl"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "bitfield-struct",
  "build_rs_guest_arch",
  "fs-err",
@@ -2703,7 +2692,6 @@ dependencies = [
  "memory_range",
  "nix 0.26.4",
  "open_enum",
- "page_pool_alloc",
  "pal",
  "parking_lot",
  "safe_intrinsics",
@@ -2713,6 +2701,7 @@ dependencies = [
  "thiserror 2.0.0",
  "tracelimit",
  "tracing",
+ "user_driver",
  "x86defs",
  "zerocopy 0.8.14",
 ]
@@ -4696,6 +4685,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "openhcl_dma_manager"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "hcl",
+ "hcl_mapper",
+ "hvdef",
+ "inspect",
+ "lower_vtl_permissions_guard",
+ "memory_range",
+ "mesh",
+ "page_pool_alloc",
+ "user_driver",
+ "virt",
+ "vmcore",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5259,6 +5266,7 @@ dependencies = [
  "image",
  "inspect",
  "jiff",
+ "kmsg",
  "libtest-mimic",
  "linkme",
  "mbrman",
@@ -7177,14 +7185,12 @@ dependencies = [
  "futures",
  "futures-concurrency",
  "get_helpers",
- "get_lower_vtl",
  "get_protocol",
  "getrandom",
  "guest_emulation_transport",
  "guestmem",
  "guid",
  "hcl_compat_uefi_nvram_storage",
- "hcl_mapper",
  "hvdef",
  "hyperv_ic_guest",
  "hyperv_ic_resources",
@@ -7202,7 +7208,6 @@ dependencies = [
  "loader",
  "loader_defs",
  "local_clock",
- "lower_vtl_permissions_guard",
  "mana_driver",
  "mcr_resources",
  "memory_range",
@@ -7218,7 +7223,7 @@ dependencies = [
  "nvme_driver",
  "nvme_resources",
  "openhcl_attestation_protocol",
- "page_pool_alloc",
+ "openhcl_dma_manager",
  "pal",
  "pal_async",
  "pal_uring",
@@ -7724,7 +7729,6 @@ dependencies = [
  "libc",
  "memory_range",
  "mesh",
- "page_pool_alloc",
  "pal",
  "pal_async",
  "pal_uring",
@@ -7736,6 +7740,7 @@ dependencies = [
  "thiserror 2.0.0",
  "tracelimit",
  "tracing",
+ "user_driver",
  "virt",
  "virt_support_aarch64emu",
  "virt_support_apic",
@@ -8124,11 +8129,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
+ "getrandom",
  "guid",
  "inspect",
  "mesh",
  "pal_async",
  "pal_event",
+ "test_with_tracing",
  "thiserror 2.0.0",
  "tracing",
  "vmbus_async",
@@ -8323,6 +8330,7 @@ dependencies = [
  "async-trait",
  "futures",
  "futures-concurrency",
+ "getrandom",
  "guestmem",
  "guid",
  "hvdef",
@@ -8597,6 +8605,7 @@ dependencies = [
  "mesh",
  "mesh_rpc",
  "nvme_resources",
+ "pal",
  "pal_async",
  "petri",
  "petri_artifact_resolver_openvmm_known_paths",
