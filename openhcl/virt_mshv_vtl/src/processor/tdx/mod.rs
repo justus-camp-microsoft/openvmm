@@ -494,13 +494,11 @@ impl HardwareIsolatedBacking for TdxBacked {
         &shared.cvm
     }
 
-    fn switch_vtl_state(
-        _this: &mut UhProcessor<'_, Self>,
-        _source_vtl: GuestVtl,
-        _target_vtl: GuestVtl,
-    ) {
+    fn switch_vtl(this: &mut UhProcessor<'_, Self>, _source_vtl: GuestVtl, target_vtl: GuestVtl) {
         // The GPs, Fxsave, and CR2 are saved in the shared kernel state. No copying needed.
         // Debug registers and XFEM are shared architecturally. No copying needed.
+
+        this.backing.cvm_state_mut().exit_vtl = target_vtl;
     }
 
     fn translation_registers(
@@ -2722,11 +2720,10 @@ impl<T: CpuIo> UhHypercallHandler<'_, '_, T, TdxBacked> {
             hv1_hypercall::HvPostMessage,
             hv1_hypercall::HvSignalEvent,
             hv1_hypercall::HvExtQueryCapabilities,
-            // TODO TDX: copied from SNP, enable individually as needed.
             hv1_hypercall::HvGetVpRegisters,
             hv1_hypercall::HvSetVpRegisters,
-            // hv1_hypercall::HvEnablePartitionVtl,
-            // hv1_hypercall::HvX64EnableVpVtl,
+            hv1_hypercall::HvEnablePartitionVtl,
+            hv1_hypercall::HvX64EnableVpVtl,
             // hv1_hypercall::HvVtlCall,
             // hv1_hypercall::HvVtlReturn,
             hv1_hypercall::HvModifyVtlProtectionMask,
