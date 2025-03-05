@@ -14,6 +14,7 @@ use inspect_counters::Counter;
 use net_backend::BufferAccess;
 use net_backend::L4Protocol;
 use net_backend::QueueConfig;
+use net_backend::QueueSavedState;
 use net_backend::RssConfig;
 use net_backend::RxChecksumState;
 use net_backend::RxId;
@@ -239,6 +240,10 @@ impl net_backend::Queue for ConsommeQueue {
 
     fn buffer_access(&mut self) -> Option<&mut dyn BufferAccess> {
         Some(self.state.pool.as_mut())
+    }
+
+    fn save(&mut self) -> anyhow::Result<Box<dyn QueueSavedState>> {
+        todo!()
     }
 }
 

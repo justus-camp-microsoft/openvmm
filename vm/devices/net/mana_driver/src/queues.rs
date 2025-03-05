@@ -71,8 +71,8 @@ impl Doorbell for NullDoorbell {
 /// A single GDMA doorbell page.
 #[derive(Clone)]
 pub struct DoorbellPage {
-    doorbell: Arc<dyn Doorbell>,
-    doorbell_id: u32,
+    pub doorbell: Arc<dyn Doorbell>,
+    pub doorbell_id: u32,
 }
 
 impl DoorbellPage {
@@ -223,7 +223,7 @@ impl<T: IntoBytes + FromBytes + Immutable + KnownLayout> CqEq<T> {
     }
 
     /// Save the state of the queue
-    pub(crate) fn save(&self) -> CqEqSavedState {
+    pub fn save(&self) -> CqEqSavedState {
         tracing::info!("Saving queue state: ");
         let state = CqEqSavedState {
             doorbell: DoorbellSavedState {

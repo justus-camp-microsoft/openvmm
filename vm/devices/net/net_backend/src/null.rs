@@ -10,6 +10,7 @@ use crate::Endpoint;
 use crate::MultiQueueSupport;
 use crate::Queue;
 use crate::QueueConfig;
+use crate::QueueSavedState;
 use crate::RssConfig;
 use crate::RxId;
 use crate::TxId;
@@ -120,5 +121,9 @@ impl Queue for NullQueue {
 
     fn buffer_access(&mut self) -> Option<&mut dyn BufferAccess> {
         None
+    }
+
+    fn save(&mut self) -> anyhow::Result<Box<dyn QueueSavedState>> {
+        unimplemented!()
     }
 }

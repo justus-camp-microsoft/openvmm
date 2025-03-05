@@ -913,11 +913,7 @@ impl HclNetworkVFManager {
     )> {
         tracing::info!("creating mana device. mana_state: {:?}", mana_state);
 
-        let mana_state = if let Some(mana_state) = mana_state {
-            Some(mana_state[0].clone())
-        } else {
-            None
-        };
+        let mana_state = mana_state.as_ref().map(|mana_state| mana_state[0].clone());
 
         let device = create_mana_device(
             driver_source,

@@ -13,6 +13,7 @@ use crate::gdma_driver::GdmaDriverSavedState;
 use crate::queues;
 use crate::queues::Doorbell;
 use crate::queues::DoorbellPage;
+use crate::queues::DoorbellSavedState;
 use anyhow::Context;
 use futures::lock::Mutex;
 use futures::StreamExt;
@@ -34,6 +35,7 @@ use pal_async::task::Task;
 use std::sync::Arc;
 use user_driver::interrupt::DeviceInterrupt;
 use user_driver::memory::MemoryBlock;
+use user_driver::memory::MemoryBlockSavedState;
 use user_driver::memory::PAGE_SIZE;
 use user_driver::DeviceBacking;
 use user_driver::DmaClient;
@@ -394,6 +396,43 @@ impl<T: DeviceBacking> Vport<T> {
         })
     }
 
+    /// Restores an event queue that was kept around during servicing.
+    pub async fn restore_eq(
+        &self,
+        arena: &mut ResourceArena,
+        size: u32,
+        cpu: u32,
+    ) -> anyhow::Result<BnicEq> {
+        let mut gdma = self.inner.gdma.lock().await;
+        let dma_client = gdma.device().dma_client();
+        let mem = dma_client
+            .allocate_dma_buffer(size as usize)
+            .context("Failed to allocate DMA buffer")?;
+
+        let gdma_region = gdma
+            .create_dma_region(arena, self.inner.dev_id, mem.clone())
+            .await
+            .context("failed to create eq dma region")?;
+        let (id, interrupt) = gdma
+            .create_eq(
+                arena,
+                self.inner.dev_id,
+                gdma_region,
+                size,
+                self.inner.dev_data.pdid,
+                self.inner.dev_data.db_id,
+                cpu,
+            )
+            .await
+            .context("failed to create eq")?;
+        Ok(BnicEq {
+            doorbell: DoorbellPage::new(self.inner.doorbell.clone(), self.inner.dev_data.db_id)?,
+            mem,
+            id,
+            interrupt,
+        })
+    }
+
     /// Creates a new work queue (transmit or receive).
     pub async fn new_wq(
         &self,
@@ -403,6 +442,71 @@ impl<T: DeviceBacking> Vport<T> {
         cq_size: u32,
         eq_id: u32,
     ) -> anyhow::Result<BnicWq> {
+        tracing::info!("Creating WQ");
+
+        assert!(wq_size >= PAGE_SIZE as u32 && wq_size.is_power_of_two());
+        assert!(cq_size >= PAGE_SIZE as u32 && cq_size.is_power_of_two());
+        let mut gdma = self.inner.gdma.lock().await;
+
+        let dma_client = gdma.device().dma_client();
+
+        let mem = dma_client
+            .allocate_dma_buffer((wq_size + cq_size) as usize)
+            .context("failed to allocate DMA buffer")?;
+
+        let wq_mem = mem.subblock(0, wq_size as usize);
+        let cq_mem = mem.subblock(wq_size as usize, cq_size as usize);
+
+        let wq_gdma_region = gdma
+            .create_dma_region(arena, self.inner.dev_id, wq_mem.clone())
+            .await?;
+        let cq_gdma_region = gdma
+            .create_dma_region(arena, self.inner.dev_id, cq_mem.clone())
+            .await?;
+        let wq_type = if is_send {
+            GdmaQueueType::GDMA_SQ
+        } else {
+            GdmaQueueType::GDMA_RQ
+        };
+        let doorbell = DoorbellPage::new(self.inner.doorbell.clone(), self.inner.dev_data.db_id)?;
+        let resp = BnicDriver::new(&mut *gdma, self.inner.dev_id)
+            .create_wq_obj(
+                arena,
+                self.config.vport,
+                wq_type,
+                &WqConfig {
+                    wq_gdma_region,
+                    cq_gdma_region,
+                    wq_size,
+                    cq_size,
+                    cq_moderation_ctx_id: 0,
+                    eq_id,
+                },
+            )
+            .await?;
+
+        Ok(BnicWq {
+            doorbell,
+            wq_mem,
+            cq_mem,
+            wq_id: resp.wq_id,
+            cq_id: resp.cq_id,
+            is_send,
+            wq_obj: resp.wq_obj,
+        })
+    }
+
+    /// Restores work queue (transmit or receive) that was kept around during servicing.
+    pub async fn restore_wq(
+        &self,
+        arena: &mut ResourceArena,
+        is_send: bool,
+        wq_size: u32,
+        cq_size: u32,
+        eq_id: u32,
+    ) -> anyhow::Result<BnicWq> {
+        tracing::info!("Creating WQ");
+
         assert!(wq_size >= PAGE_SIZE as u32 && wq_size.is_power_of_two());
         assert!(cq_size >= PAGE_SIZE as u32 && cq_size.is_power_of_two());
         let mut gdma = self.inner.gdma.lock().await;
@@ -585,7 +689,7 @@ pub struct TxConfig {
 
 /// An event queue.
 pub struct BnicEq {
-    doorbell: DoorbellPage,
+    pub doorbell: DoorbellPage,
     mem: MemoryBlock,
     id: u32,
     interrupt: DeviceInterrupt,
@@ -606,6 +710,23 @@ impl BnicEq {
     pub fn queue(&self) -> queues::Eq {
         queues::Eq::new_eq(self.mem.clone(), self.doorbell.clone(), self.id)
     }
+
+    pub fn save(&self) -> anyhow::Result<BnicEqSavedState> {
+        Ok(BnicEqSavedState {
+            mem: self.mem.save(),
+            doorbell: DoorbellSavedState {
+                doorbell_id: self.doorbell.doorbell_id as u64,
+                page_count: self.doorbell.doorbell.page_count(),
+            },
+            id: self.id,
+        })
+    }
+}
+
+pub struct BnicEqSavedState {
+    mem: MemoryBlockSavedState,
+    doorbell: DoorbellSavedState,
+    id: u32,
 }
 
 /// A work queue (transmit or receive).
@@ -638,4 +759,27 @@ impl BnicWq {
     pub fn wq_obj(&self) -> u64 {
         self.wq_obj
     }
+
+    pub fn save(&self) -> anyhow::Result<BnicWqSavedState> {
+        Ok(BnicWqSavedState {
+            doorbell: DoorbellSavedState {
+                doorbell_id: self.doorbell.doorbell_id as u64,
+                page_count: self.doorbell.doorbell.page_count(),
+            },
+            wq_mem: self.wq_mem.save(),
+            cq_mem: self.cq_mem.save(),
+            wq_id: self.wq_id,
+            cq_id: self.cq_id,
+            is_send: self.is_send,
+        })
+    }
+}
+
+pub struct BnicWqSavedState {
+    doorbell: DoorbellSavedState,
+    wq_mem: MemoryBlockSavedState,
+    cq_mem: MemoryBlockSavedState,
+    wq_id: u32,
+    cq_id: u32,
+    is_send: bool,
 }

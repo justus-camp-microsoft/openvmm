@@ -702,7 +702,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
 
         let mut interrupt_config = Vec::new();
         for (index, interrupt) in self.interrupts.iter().enumerate() {
-            if let Some(_) = interrupt {
+            if interrupt.is_some() {
                 interrupt_config.push(InterruptSavedState {
                     msix_index: index as u32,
                     cpu: index as u32,
@@ -710,7 +710,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             }
         }
 
-        return Ok(GdmaDriverSavedState {
+        Ok(GdmaDriverSavedState {
             mem: SavedMemoryState {
                 base_pfn: self.dma_buffer.pfns()[0],
                 len: self.dma_buffer.len(),
@@ -719,7 +719,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             cq: self.cq.save(),
             rq: self.rq.save(),
             sq: self.sq.save(),
-            db_id: doorbell.doorbell_id as u64,
+            db_id: doorbell.doorbell_id,
             gpa_mkey: self.gpa_mkey,
             pdid: self._pdid,
             cq_armed: self.cq_armed,
@@ -730,7 +730,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
             num_msix: self.num_msix,
             min_queue_avail: self.min_queue_avail,
             interrupt_config,
-        });
+        })
     }
 
     async fn report_hwc_timeout(

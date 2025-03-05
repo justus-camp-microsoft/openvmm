@@ -3840,7 +3840,10 @@ impl Coordinator {
                         self.workers[0].start();
                     }
                 }
-                Message::Internal(CoordinatorMessage::Restart) => self.restart = true,
+                Message::Internal(CoordinatorMessage::Restart) => {
+                    tracing::info!("received restart message in netvsp coordinator");
+                    self.restart = true;
+                }
                 Message::Internal(CoordinatorMessage::StartTimer(duration)) => {
                     sleep_duration = Some(duration);
                     // Restart primary task.
@@ -4071,6 +4074,9 @@ impl Coordinator {
 
     async fn restart_queues(&mut self, c_state: &mut CoordinatorState) -> Result<(), WorkerError> {
         // Drop all the queues and stop the endpoint. Collect the worker drivers to pass to the queues.
+
+        tracing::info!("Restarting netvsp queues");
+
         let drivers = self
             .workers
             .iter_mut()

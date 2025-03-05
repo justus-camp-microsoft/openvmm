@@ -27,8 +27,10 @@ use mana_driver::mana::RxConfig;
 use mana_driver::mana::TxConfig;
 use mana_driver::mana::Vport;
 use mana_driver::queues::Cq;
+use mana_driver::queues::CqEqSavedState;
 use mana_driver::queues::Eq;
 use mana_driver::queues::Wq;
+use mana_driver::queues::WqSavedState;
 use net_backend::BufferAccess;
 use net_backend::Endpoint;
 use net_backend::EndpointAction;
@@ -37,6 +39,7 @@ use net_backend::L4Protocol;
 use net_backend::MultiQueueSupport;
 use net_backend::Queue;
 use net_backend::QueueConfig;
+use net_backend::QueueSavedState;
 use net_backend::RssConfig;
 use net_backend::RxChecksumState;
 use net_backend::RxId;
@@ -267,6 +270,105 @@ impl<T: DeviceBacking> InspectMut for ManaEndpoint<T> {
 }
 
 impl<T: DeviceBacking> ManaEndpoint<T> {
+    async fn restore_queue(
+        &mut self,
+        tx_config: &TxConfig,
+        pool: Box<dyn BufferAccess>,
+        initial_rx: &[RxId],
+        arena: &mut ResourceArena,
+        cpu: u32,
+        state: ManaQueueSavedState,
+    ) -> anyhow::Result<(ManaQueue<T>, QueueResources)> {
+        let eq_size = 0x1000;
+        let tx_wq_size = 0x4000;
+        let tx_cq_size = 0x4000;
+        let rx_wq_size = 0x8000;
+        let rx_cq_size = 0x4000;
+
+        let eq = (self.vport.restore_eq(arena, eq_size, cpu))
+            .await
+            .context("failed to create eq")?;
+        let txq = (self
+            .vport
+            .restore_wq(arena, true, tx_wq_size, tx_cq_size, eq.id()))
+        .await
+        .context("failed to create tx queue")?;
+        let rxq = (self
+            .vport
+            .restore_wq(arena, false, rx_wq_size, rx_cq_size, eq.id()))
+        .await
+        .context("failed to create rx queue")?;
+
+        let interrupt = eq.interrupt();
+
+        // The effective rx max may be smaller depending on the number of SGE
+        // entries used in the work queue (which depends on the NIC's configured
+        // MTU).
+        let rx_max = (rx_cq_size / size_of::<Cqe>() as u32).min(512);
+
+        let tx_max = tx_cq_size / size_of::<Cqe>() as u32;
+
+        let tx_bounce_buffer = ContiguousBufferManager::new(
+            self.vport.dma_client().await,
+            if self.bounce_buffer {
+                TX_BOUNCE_BUFFER_PAGE_LIMIT
+            } else {
+                SPLIT_HEADER_BOUNCE_PAGE_LIMIT
+            },
+        )
+        .context("failed to allocate tx bounce buffer")?;
+
+        let rx_bounce_buffer = if self.bounce_buffer {
+            Some(
+                ContiguousBufferManager::new(
+                    self.vport.dma_client().await,
+                    RX_BOUNCE_BUFFER_PAGE_LIMIT,
+                )
+                .context("failed to allocate rx bounce buffer")?,
+            )
+        } else {
+            None
+        };
+
+        let mut queue = ManaQueue {
+            guest_memory: pool.guest_memory().clone(),
+            pool,
+            rx_bounce_buffer,
+            tx_bounce_buffer,
+            vport: Arc::downgrade(&self.vport),
+            queue_tracker: self.queue_tracker.clone(),
+            eq: eq.queue(),
+            eq_armed: true,
+            interrupt,
+            tx_cq_armed: true,
+            rx_cq_armed: true,
+            vp_offset: tx_config.tx_vport_offset,
+            mem_key: self.vport.gpa_mkey(),
+            tx_wq: txq.wq(),
+            tx_cq: txq.cq(),
+            rx_wq: rxq.wq(),
+            rx_cq: rxq.cq(),
+            avail_rx: VecDeque::new(),
+            posted_rx: VecDeque::new(),
+            rx_max: rx_max as usize,
+            posted_tx: VecDeque::new(),
+            dropped_tx: VecDeque::new(),
+            tx_max: tx_max as usize,
+            force_tx_header_bounce: false,
+            stats: QueueStats::default(),
+        };
+        self.queue_tracker.0.fetch_add(1, Ordering::AcqRel);
+        queue.rx_avail(initial_rx);
+        queue.rx_wq.commit();
+
+        let resources = QueueResources {
+            _eq: eq,
+            rxq,
+            _txq: txq,
+        };
+        Ok((queue, resources))
+    }
+
     async fn new_queue(
         &mut self,
         tx_config: &TxConfig,
@@ -537,6 +639,26 @@ impl<T: DeviceBacking> Endpoint for ManaEndpoint<T> {
     fn link_speed(&self) -> u64 {
         // Hard code to 200Gbps until MANA supports querying this.
         200 * 1000 * 1000 * 1000
+    }
+
+    /// Save queues for later restoration
+    async fn save_queues(
+        &mut self,
+        queues: &mut Vec<Box<dyn Queue>>,
+    ) -> anyhow::Result<Vec<Box<dyn QueueSavedState>>> {
+        let mut saved_queues = Vec::new();
+        for queue in queues.iter_mut() {
+            saved_queues.push(queue.save()?);
+        }
+        Ok(saved_queues)
+    }
+
+    /// Restores queues from saved state
+    async fn restore_queues(
+        &mut self,
+        saved_queues: &mut Vec<Box<dyn QueueSavedState>>,
+    ) -> anyhow::Result<()> {
+        todo!()
     }
 }
 
@@ -938,6 +1060,40 @@ impl<T: DeviceBacking + Send> Queue for ManaQueue<T> {
     fn buffer_access(&mut self) -> Option<&mut dyn BufferAccess> {
         Some(self.pool.as_mut())
     }
+
+    fn save(&mut self) -> anyhow::Result<Box<dyn QueueSavedState>> {
+        Ok(Box::new(ManaQueueSavedState {
+            queue_tracker: self.queue_tracker.clone(),
+            eq: self.eq.save(),
+            eq_armed: self.eq_armed,
+            tx_cq_armed: self.tx_cq_armed,
+            rx_cq_armed: self.rx_cq_armed,
+            vp_offset: self.vp_offset,
+            mem_key: self.mem_key,
+            tx_wq: self.tx_wq.save(),
+            tx_cq: self.tx_cq.save(),
+            rx_wq: self.rx_wq.save(),
+            rx_cq: self.rx_cq.save(),
+            avail_rx: VecDeque::new(),
+            posted_rx: VecDeque::new(),
+            rx_max: self.rx_max,
+            posted_tx: VecDeque::new(),
+            dropped_tx: VecDeque::new(),
+            tx_max: self.tx_max,
+            force_tx_header_bounce: self.force_tx_header_bounce,
+            stats: QueueStats::default(),
+        }))
+    }
+}
+
+impl QueueSavedState for ManaQueueSavedState {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl<T: DeviceBacking> ManaQueue<T> {
@@ -1158,6 +1314,73 @@ impl<T: DeviceBacking> ManaQueue<T> {
         };
         Ok(Some(tx))
     }
+
+    fn restore(saved_state: ManaQueueSavedState) -> Self {
+        ManaQueue {
+            pool: todo!(),
+            guest_memory: todo!(),
+            rx_bounce_buffer: None,    // TODO: handle bounce buffer stuff
+            tx_bounce_buffer: todo!(), // TODO: handle bounce buffer stuff
+            vport: todo!(),
+            queue_tracker: todo!(),
+            eq: todo!(),
+            eq_armed: saved_state.eq_armed,
+            interrupt: todo!(),
+            tx_cq_armed: saved_state.tx_cq_armed,
+            rx_cq_armed: saved_state.rx_cq_armed,
+            vp_offset: saved_state.vp_offset,
+            mem_key: saved_state.mem_key,
+            tx_wq: todo!(),
+            tx_cq: todo!(),
+            rx_wq: todo!(),
+            rx_cq: todo!(),
+            avail_rx: todo!(),
+            posted_rx: todo!(),
+            rx_max: todo!(),
+            posted_tx: todo!(),
+            dropped_tx: todo!(),
+            tx_max: saved_state.tx_max,
+            force_tx_header_bounce: saved_state.force_tx_header_bounce,
+            stats: QueueStats::default(),
+        }
+    }
+}
+
+struct ManaQueueSavedState {
+    // pool: Box<dyn BufferAccess>,
+    // guest_memory: GuestMemory,
+    // rx_bounce_buffer: Option<ContiguousBufferManager>,
+    // tx_bounce_buffer: ContiguousBufferManager,
+
+    // vport: Weak<Vport<T>>,
+    queue_tracker: Arc<(AtomicUsize, SlimEvent)>,
+
+    eq: CqEqSavedState,
+    eq_armed: bool,
+    // interrupt: DeviceInterrupt,
+    tx_cq_armed: bool,
+    rx_cq_armed: bool,
+
+    vp_offset: u16,
+    mem_key: u32,
+
+    tx_wq: WqSavedState,
+    tx_cq: CqEqSavedState,
+
+    rx_wq: WqSavedState,
+    rx_cq: CqEqSavedState,
+
+    avail_rx: VecDeque<RxId>,
+    posted_rx: VecDeque<PostedRx>,
+    rx_max: usize,
+
+    posted_tx: VecDeque<PostedTx>,
+    dropped_tx: VecDeque<TxId>,
+    tx_max: usize,
+
+    force_tx_header_bounce: bool,
+
+    stats: QueueStats,
 }
 
 struct ContiguousBufferInUse {
@@ -1440,5 +1663,110 @@ mod tests {
         };
         let thing = ManaDevice::new(&driver, device, 1, 1, None).await.unwrap();
         let _ = thing.new_vport(0, None, &dev_config).await.unwrap();
+    }
+
+    #[async_test]
+    async fn test_save_restore(driver: DefaultDriver) {
+        let dma_mode = GuestDmaMode::DirectDma;
+
+        const PACKET_LEN: usize = 1138;
+        let base_len = 1 << 20;
+        let payload_len = 1 << 20;
+        let mem: DeviceSharedMemory = DeviceSharedMemory::new(base_len, payload_len);
+        let payload_mem = mem
+            .guest_memory()
+            .subrange(base_len as u64, payload_len as u64, false)
+            .unwrap();
+        let driver_dma_mem = if dma_mode == GuestDmaMode::DirectDma {
+            mem.guest_memory_for_driver_dma()
+                .subrange(base_len as u64, payload_len as u64, false)
+                .unwrap()
+        } else {
+            payload_mem.clone()
+        };
+        let mut msi_set = MsiInterruptSet::new();
+        let device = gdma::GdmaDevice::new(
+            &VmTaskDriverSource::new(SingleDriverBackend::new(driver.clone())),
+            mem.guest_memory().clone(),
+            &mut msi_set,
+            vec![VportConfig {
+                mac_address: [1, 2, 3, 4, 5, 6].into(),
+                endpoint: Box::new(LoopbackEndpoint::new()),
+            }],
+            &mut ExternallyManagedMmioIntercepts,
+        );
+        let device = EmulatedDevice::new(device, msi_set, mem);
+        let dev_config = ManaQueryDeviceCfgResp {
+            pf_cap_flags1: 0.into(),
+            pf_cap_flags2: 0,
+            pf_cap_flags3: 0,
+            pf_cap_flags4: 0,
+            max_num_vports: 1,
+            reserved: 0,
+            max_num_eqs: 64,
+        };
+        let thing = ManaDevice::new(&driver, device, 1, 1, None).await.unwrap();
+        let vport = thing.new_vport(0, None, &dev_config).await.unwrap();
+        let mut endpoint = ManaEndpoint::new(driver.clone(), vport, dma_mode).await;
+        let mut queues = Vec::new();
+        let pool = net_backend::tests::Bufs::new(driver_dma_mem);
+        endpoint
+            .get_queues(
+                vec![QueueConfig {
+                    pool: Box::new(pool),
+                    initial_rx: &(1..128).map(RxId).collect::<Vec<_>>(),
+                    driver: Box::new(driver.clone()),
+                }],
+                None,
+                &mut queues,
+            )
+            .await
+            .unwrap();
+
+        let mut saved_queues = endpoint.save_queues(&mut queues).await.unwrap();
+        endpoint.stop().await;
+        endpoint.restore_queues(&mut saved_queues).await.unwrap();
+
+        for i in 0..1000 {
+            let sent_data = (0..PACKET_LEN).map(|v| (i + v) as u8).collect::<Vec<u8>>();
+            payload_mem.write_at(0, &sent_data).unwrap();
+
+            queues[0]
+                .tx_avail(&[TxSegment {
+                    ty: net_backend::TxSegmentType::Head(net_backend::TxMetadata {
+                        id: TxId(1),
+                        segment_count: 1,
+                        len: sent_data.len(),
+                        ..Default::default()
+                    }),
+                    gpa: 0,
+                    len: sent_data.len() as u32,
+                }])
+                .unwrap();
+
+            let mut packets = [RxId(0); 2];
+            let mut done = [TxId(0); 2];
+            let mut done_n = 0;
+            let mut packets_n = 0;
+            while done_n == 0 || packets_n == 0 {
+                poll_fn(|cx| queues[0].poll_ready(cx)).await;
+                packets_n += queues[0].rx_poll(&mut packets[packets_n..]).unwrap();
+                done_n += queues[0].tx_poll(&mut done[done_n..]).unwrap();
+            }
+            assert_eq!(packets_n, 1);
+            let rx_id = packets[0];
+
+            let mut received_data = vec![0; PACKET_LEN];
+            payload_mem
+                .read_at(2048 * rx_id.0 as u64, &mut received_data)
+                .unwrap();
+            assert_eq!(&received_data[..], sent_data, "{i} {:?}", rx_id);
+            assert_eq!(done_n, 1);
+            assert_eq!(done[0].0, 1);
+            queues[0].rx_avail(&[rx_id]);
+        }
+
+        drop(queues);
+        endpoint.stop().await;
     }
 }

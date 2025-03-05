@@ -13,6 +13,7 @@ use crate::Endpoint;
 use crate::MultiQueueSupport;
 use crate::Queue;
 use crate::QueueConfig;
+use crate::QueueSavedState;
 use crate::RssConfig;
 use crate::RxId;
 use crate::RxMetadata;
@@ -131,5 +132,9 @@ impl Queue for LoopbackQueue {
 
     fn buffer_access(&mut self) -> Option<&mut dyn BufferAccess> {
         Some(self.pool.as_mut())
+    }
+
+    fn save(&mut self) -> anyhow::Result<Box<dyn QueueSavedState>> {
+        todo!()
     }
 }

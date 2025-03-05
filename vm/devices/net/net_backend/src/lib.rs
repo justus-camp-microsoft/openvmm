@@ -102,6 +102,22 @@ pub trait Endpoint: Send + Sync + InspectMut {
         // can overwrite.
         10 * 1000 * 1000 * 1000
     }
+
+    /// Save queues for restoration during servicing
+    async fn save_queues(
+        &mut self,
+        queues: &mut Vec<Box<dyn Queue>>,
+    ) -> anyhow::Result<Vec<Box<dyn QueueSavedState>>> {
+        unimplemented!()
+    }
+
+    /// Restores queues from saved state
+    async fn restore_queues(
+        &mut self,
+        saved_queues: &mut Vec<Box<dyn QueueSavedState>>,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
 }
 
 /// Multi-queue related support.
@@ -160,6 +176,25 @@ pub trait Queue: Send + InspectMut {
 
     /// Get the buffer access.
     fn buffer_access(&mut self) -> Option<&mut dyn BufferAccess>;
+
+    /// Save queue state for restoration during servicing.
+    fn save(&mut self) -> anyhow::Result<Box<dyn QueueSavedState>> {
+        unimplemented!()
+    }
+
+    /// Restore a queue from saved state during servicing.
+    fn restore(&mut self, saved_state: Box<dyn QueueSavedState>) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+}
+
+/// Base trait for all queue saved states
+pub trait QueueSavedState: Send + Sync {
+    /// Convert to Any for downcasting
+    fn as_any(&self) -> &dyn std::any::Any;
+
+    /// Convert to mutable Any for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 /// A trait for providing access to guest memory buffers.
