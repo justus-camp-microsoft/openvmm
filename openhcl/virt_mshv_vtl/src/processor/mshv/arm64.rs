@@ -7,27 +7,29 @@
 
 type VpRegisterName = HvArm64RegisterName;
 
-use super::super::private::BackingParams;
+use super::super::Backing;
+use super::super::BackingParams;
+use super::super::UhRunVpError;
 use super::super::signal_mnf;
 use super::super::vp_state;
 use super::super::vp_state::UhVpStateAccess;
-use super::super::BackingPrivate;
-use super::super::UhRunVpError;
+use super::VbsIsolatedVtl1State;
+use crate::BackingShared;
+use crate::Error;
+use crate::GuestVsmState;
+use crate::processor::BackingSharedParams;
 use crate::processor::UhEmulationState;
 use crate::processor::UhHypercallHandler;
 use crate::processor::UhProcessor;
-use crate::BackingShared;
-use crate::Error;
 use aarch64defs::Cpsr64;
 use aarch64emu::AccessCpuState;
 use aarch64emu::InterceptState;
-use hcl::ioctl;
-use hcl::ioctl::aarch64::MshvArm64;
 use hcl::GuestVtl;
 use hcl::UnsupportedGuestVtl;
+use hcl::ioctl;
+use hcl::ioctl::aarch64::MshvArm64;
 use hv1_emulator::hv::ProcessorVtlHv;
 use hv1_emulator::synic::ProcessorSynic;
-use hvdef::hypercall;
 use hvdef::HvAarch64PendingEvent;
 use hvdef::HvArm64RegisterName;
 use hvdef::HvArm64ResetType;
@@ -36,16 +38,18 @@ use hvdef::HvMapGpaFlags;
 use hvdef::HvMessageType;
 use hvdef::HvRegisterValue;
 use hvdef::Vtl;
+use hvdef::hypercall;
 use inspect::Inspect;
 use inspect::InspectMut;
 use inspect_counters::Counter;
+use parking_lot::RwLock;
+use virt::VpHaltReason;
+use virt::VpIndex;
 use virt::aarch64::vp;
 use virt::aarch64::vp::AccessVpState;
 use virt::io::CpuIo;
 use virt::state::HvRegisterState;
 use virt::state::StateElement;
-use virt::VpHaltReason;
-use virt::VpIndex;
 use virt_support_aarch64emu::emulate;
 use virt_support_aarch64emu::emulate::EmuCheckVtlAccessError;
 use virt_support_aarch64emu::emulate::EmuTranslateError;
@@ -66,6 +70,21 @@ pub struct HypervisorBackedArm64 {
     stats: ProcessorStatsArm64,
 }
 
+/// Partition-wide shared data for hypervisor backed VMs.
+#[derive(Inspect)]
+pub struct HypervisorBackedArm64Shared {
+    pub(crate) guest_vsm: RwLock<GuestVsmState<VbsIsolatedVtl1State>>,
+}
+
+impl HypervisorBackedArm64Shared {
+    /// Creates a new partition-shared data structure for hypervisor backed VMs.
+    pub(crate) fn new(params: BackingSharedParams) -> Result<Self, Error> {
+        Ok(Self {
+            guest_vsm: RwLock::new(GuestVsmState::from_availability(params.guest_vsm_available)),
+        })
+    }
+}
+
 #[derive(Inspect, Default)]
 struct ProcessorStatsArm64 {
     mmio: Counter,
@@ -74,16 +93,21 @@ struct ProcessorStatsArm64 {
     synic_deliverable: Counter,
 }
 
-impl BackingPrivate for HypervisorBackedArm64 {
+#[expect(private_interfaces)]
+impl Backing for HypervisorBackedArm64 {
     type HclBacking<'mshv> = MshvArm64;
     type EmulationCache = UhCpuStateCache;
-    type Shared = ();
+    type Shared = HypervisorBackedArm64Shared;
 
-    fn shared(_shared: &BackingShared) -> &Self::Shared {
-        &()
+    fn shared(shared: &BackingShared) -> &Self::Shared {
+        let BackingShared::Hypervisor(shared) = shared;
+        shared
     }
 
-    fn new(params: BackingParams<'_, '_, Self>, _shared: &()) -> Result<Self, Error> {
+    fn new(
+        params: BackingParams<'_, '_, Self>,
+        _shared: &HypervisorBackedArm64Shared,
+    ) -> Result<Self, Error> {
         vp::Registers::at_reset(&params.partition.caps, params.vp_info);
         // TODO: reset the registers in the CPU context.
         let _ = params.runner;
@@ -114,8 +138,6 @@ impl BackingPrivate for HypervisorBackedArm64 {
         dev: &impl CpuIo,
         _stop: &mut virt::StopVp<'_>,
     ) -> Result<(), VpHaltReason<UhRunVpError>> {
-        let () = this.shared;
-
         if this.backing.deliverability_notifications
             != this.backing.next_deliverability_notifications
         {
@@ -308,7 +330,7 @@ impl UhProcessor<'_, HypervisorBackedArm64> {
         )
         .unwrap()
         .0; // TODO: zerocopy: err, use-rest-of-range (https://github.com/microsoft/openvmm/issues/759)
-            // tracing::trace!(msg = %format_args!("{:x?}", message), "mmio");
+        // tracing::trace!(msg = %format_args!("{:x?}", message), "mmio");
 
         let intercept_state = InterceptState {
             instruction_bytes: message.instruction_bytes,
@@ -635,7 +657,10 @@ impl<T: CpuIo> EmulatorSupport for UhEmulationState<'_, '_, T, HypervisorBackedA
         // the HvCheckSparseGpaPageVtlAccess hypercall--which is unimplemented in whp--will never be made.
         if mode == emulate::TranslateMode::Execute
             && self.vtl == GuestVtl::Vtl0
-            && self.vp.vtl1_supported()
+            && !matches!(
+                *self.vp.shared.guest_vsm.read(),
+                GuestVsmState::NotPlatformSupported,
+            )
         {
             // Should always be called after translate gva with the tlb lock flag
             debug_assert!(self.vp.is_tlb_locked(Vtl::Vtl2, self.vtl));
@@ -831,15 +856,12 @@ impl UhVpStateAccess<'_, '_, HypervisorBackedArm64> {
     }
 
     /// Get the system VP registers on the current VP.
-    pub fn get_system_registers(&mut self) -> Result<vp::SystemRegisters, vp_state::Error> {
+    fn get_system_registers(&mut self) -> Result<vp::SystemRegisters, vp_state::Error> {
         self.get_register_state()
     }
 
     /// Set the system VP registers on the current VP.
-    pub fn set_system_registers(
-        &mut self,
-        regs: &vp::SystemRegisters,
-    ) -> Result<(), vp_state::Error> {
+    fn set_system_registers(&mut self, regs: &vp::SystemRegisters) -> Result<(), vp_state::Error> {
         self.set_register_state(regs)
     }
 }

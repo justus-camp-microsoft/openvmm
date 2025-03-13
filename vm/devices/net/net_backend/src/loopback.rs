@@ -6,8 +6,6 @@
 //!
 //! This is useful for testing.
 
-use crate::linearize;
-use crate::packet_count;
 use crate::BufferAccess;
 use crate::Endpoint;
 use crate::MultiQueueSupport;
@@ -19,6 +17,8 @@ use crate::RxId;
 use crate::RxMetadata;
 use crate::TxId;
 use crate::TxSegment;
+use crate::linearize;
+use crate::packet_count;
 use async_trait::async_trait;
 use inspect::InspectMut;
 use std::collections::VecDeque;

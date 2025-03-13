@@ -3,7 +3,6 @@
 
 //! Provides the [`Guid`] type with the same layout as the Windows type `GUID`.
 
-#![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
 use std::str::FromStr;
@@ -310,8 +309,8 @@ mod windows {
 
 #[cfg(test)]
 mod tests {
-    use super::guid;
     use super::Guid;
+    use super::guid;
 
     #[test]
     fn test_display_guid() {

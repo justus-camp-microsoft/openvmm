@@ -8,6 +8,7 @@
 //! SimpleVmbusClientDeviceWrapper instance.
 
 #![cfg(target_os = "linux")]
+#![expect(missing_docs)]
 #![forbid(unsafe_code)]
 
 pub mod ring_buffer;
@@ -21,8 +22,8 @@ use guid::Guid;
 use inspect::InspectMut;
 use mesh::rpc::RpcSend;
 use pal_async::driver::SpawnDriver;
-use std::future::pending;
 use std::future::Future;
+use std::future::pending;
 use std::pin::pin;
 use std::sync::Arc;
 use task_control::AsyncRun;
@@ -31,15 +32,14 @@ use task_control::InspectTaskMut;
 use task_control::StopTask;
 use task_control::TaskControl;
 use tracing::Instrument;
-use user_driver::memory::MemoryBlock;
 use user_driver::DmaClient;
-use vmbus_channel::bus::GpadlRequest;
-use vmbus_channel::bus::OpenData;
+use user_driver::memory::MemoryBlock;
 use vmbus_channel::ChannelClosed;
 use vmbus_channel::RawAsyncChannel;
 use vmbus_channel::SignalVmbusChannel;
+use vmbus_channel::bus::GpadlRequest;
+use vmbus_channel::bus::OpenData;
 use vmbus_client::ChannelRequest;
-use vmbus_client::ChannelResponse;
 use vmbus_client::OfferInfo;
 use vmbus_client::OpenOutput;
 use vmbus_client::OpenRequest;
@@ -353,16 +353,18 @@ impl<T: SimpleVmbusClientDeviceAsync> SimpleVmbusClientDeviceTask<T> {
         };
 
         if state.vtl_pages.is_some() {
-            offer
+            if let Err(err) = offer
                 .request_send
-                .send(ChannelRequest::TeardownGpadl(GpadlId(
-                    state.vtl_pages.as_ref().unwrap().pfns()[1] as u32,
-                )));
-            match offer.response_recv.next().await {
-                Some(ChannelResponse::TeardownGpadl(_)) => {}
-                None => {
-                    tracing::error!("vmbus channel handle closed waiting for GPADL teardown");
-                }
+                .call(
+                    ChannelRequest::TeardownGpadl,
+                    GpadlId(state.vtl_pages.as_ref().unwrap().pfns()[1] as u32),
+                )
+                .await
+            {
+                tracing::error!(
+                    error = &err as &dyn std::error::Error,
+                    "failed to teardown gpadl"
+                );
             }
 
             state.vtl_pages = None;
@@ -386,7 +388,11 @@ impl<T: SimpleVmbusClientDeviceAsync> SimpleVmbusClientDeviceTask<T> {
         // available everywhere.
         {
             let offer = state.offer.as_ref().expect("device opened");
-            offer.request_send.send(ChannelRequest::Close);
+            offer
+                .request_send
+                .call(ChannelRequest::Close, ())
+                .await
+                .ok();
         }
         // N.B. This will wait for a TeardownGpadl response which can be used
         // as a signal that the channel is closed and the ring buffers are no
@@ -545,8 +551,7 @@ impl<T: SimpleVmbusClientDeviceAsync> SimpleVmbusClientDeviceTask<T> {
             }
             let revoke = pin!(async {
                 if let Some(offer) = &mut state.offer {
-                    let r = offer.response_recv.next().await;
-                    assert!(r.is_none(), "unexpected channel response");
+                    (&mut offer.revoke_recv).await.ok();
                 } else {
                     pending().await
                 }
@@ -581,7 +586,7 @@ impl<T: SimpleVmbusClientDeviceAsync> SimpleVmbusClientDeviceTask<T> {
                     self.handle_start(state).await;
                 }
                 Event::Request(InterceptChannelRequest::Stop(rpc)) => {
-                    rpc.handle(|()| self.handle_stop(state)).await;
+                    rpc.handle(async |()| self.handle_stop(state).await).await;
                 }
                 Event::Request(InterceptChannelRequest::Save(rpc)) => {
                     rpc.handle_sync(|()| self.handle_save());

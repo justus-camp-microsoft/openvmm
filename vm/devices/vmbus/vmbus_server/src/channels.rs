@@ -3,25 +3,25 @@
 
 mod saved_state;
 
+use crate::Guid;
+use crate::SINT;
+use crate::SynicMessage;
 use crate::monitor::AssignedMonitors;
 use crate::protocol::Version;
-use crate::Guid;
-use crate::SynicMessage;
-use crate::SINT;
 use hvdef::Vtl;
 use inspect::Inspect;
 pub use saved_state::RestoreError;
 pub use saved_state::SavedState;
 use slab::Slab;
 use std::cmp::min;
+use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::collections::hash_map::HashMap;
-use std::collections::VecDeque;
 use std::fmt::Display;
 use std::ops::Index;
 use std::ops::IndexMut;
-use std::task::ready;
 use std::task::Poll;
+use std::task::ready;
 use thiserror::Error;
 use vmbus_channel::bus::ChannelType;
 use vmbus_channel::bus::GpadlRequest;
@@ -29,6 +29,12 @@ use vmbus_channel::bus::OfferKey;
 use vmbus_channel::bus::OfferParams;
 use vmbus_channel::bus::OpenData;
 use vmbus_channel::bus::RestoredGpadl;
+use vmbus_core::HvsockConnectRequest;
+use vmbus_core::HvsockConnectResult;
+use vmbus_core::MaxVersionInfo;
+use vmbus_core::MonitorPageGpas;
+use vmbus_core::OutgoingMessage;
+use vmbus_core::VersionInfo;
 use vmbus_core::protocol;
 use vmbus_core::protocol::ChannelId;
 use vmbus_core::protocol::ConnectionId;
@@ -37,12 +43,6 @@ use vmbus_core::protocol::GpadlId;
 use vmbus_core::protocol::Message;
 use vmbus_core::protocol::OfferFlags;
 use vmbus_core::protocol::UserDefinedData;
-use vmbus_core::HvsockConnectRequest;
-use vmbus_core::HvsockConnectResult;
-use vmbus_core::MaxVersionInfo;
-use vmbus_core::MonitorPageGpas;
-use vmbus_core::OutgoingMessage;
-use vmbus_core::VersionInfo;
 use vmbus_ring::gparange;
 use vmcore::monitor::MonitorId;
 use zerocopy::FromZeros;
@@ -85,6 +85,8 @@ pub enum ChannelError {
     ChannelNotReserved,
     #[error("received untrusted message for trusted connection")]
     UntrustedMessage,
+    #[error("received a non-resuming message while paused")]
+    Paused,
 }
 
 #[derive(Debug, Error)]
@@ -203,6 +205,7 @@ struct ConnectionInfo {
     target_message_vp: u32,
     modifying: bool,
     client_id: Guid,
+    paused: bool,
 }
 
 /// The state of the VMBus connection.
@@ -245,6 +248,14 @@ impl ConnectionState {
             ConnectionState::Connected(info) => info.trusted,
             ConnectionState::Connecting { info, .. } => info.trusted,
             _ => false,
+        }
+    }
+
+    fn is_paused(&self) -> bool {
+        if let ConnectionState::Connected(info) = self {
+            info.paused
+        } else {
+            false
         }
     }
 }
@@ -882,9 +893,11 @@ impl AssignmentEntry<'_> {
     }
 
     pub fn insert(self, offer_id: OfferId) {
-        assert!(self.list.assignments[self.index]
-            .replace(offer_id)
-            .is_none());
+        assert!(
+            self.list.assignments[self.index]
+                .replace(offer_id)
+                .is_none()
+        );
 
         if self.index < self.list.reserved_offset {
             self.list.count_in_reserved_range += 1;
@@ -1199,7 +1212,8 @@ const SUPPORTED_FEATURE_FLAGS: FeatureFlags = FeatureFlags::new()
     .with_guest_specified_signal_parameters(true)
     .with_channel_interrupt_redirection(true)
     .with_modify_connection(true)
-    .with_client_id(true);
+    .with_client_id(true)
+    .with_pause_resume(true);
 
 /// Trait for sending requests to devices and the guest.
 pub trait Notifier: Send {
@@ -1327,7 +1341,7 @@ impl Server {
             RestoreState::Restoring => {}
             RestoreState::Unmatched => unreachable!(),
             RestoreState::Restored => {
-                return Err(RestoreError::AlreadyRestored(channel.offer.key()))
+                return Err(RestoreError::AlreadyRestored(channel.offer.key()));
             }
         }
 
@@ -1369,7 +1383,7 @@ impl Server {
 
     /// Check if there are any messages in the pending queue.
     pub fn has_pending_messages(&self) -> bool {
-        !self.pending_messages.0.is_empty()
+        !self.pending_messages.0.is_empty() && !self.state.is_paused()
     }
 
     /// Tries to resend pending messages using the provided `send`` function.
@@ -1377,9 +1391,11 @@ impl Server {
         &mut self,
         mut send: impl FnMut(&OutgoingMessage) -> Poll<()>,
     ) -> Poll<()> {
-        while let Some(message) = self.pending_messages.0.front() {
-            ready!(send(message));
-            self.pending_messages.0.pop_front();
+        if !self.state.is_paused() {
+            while let Some(message) = self.pending_messages.0.front() {
+                ready!(send(message));
+                self.pending_messages.0.pop_front();
+            }
         }
 
         Poll::Ready(())
@@ -1411,7 +1427,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             RestoreState::Restoring => {}
             RestoreState::Unmatched => unreachable!(),
             RestoreState::Restored => {
-                return Err(RestoreError::AlreadyRestored(channel.offer.key()))
+                return Err(RestoreError::AlreadyRestored(channel.offer.key()));
             }
         }
 
@@ -1439,7 +1455,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                 } => {
                     self.inner
                         .pending_messages
-                        .sender(self.notifier)
+                        .sender(self.notifier, self.inner.state.is_paused())
                         .send_open_result(
                             info.channel_id,
                             &request,
@@ -1543,7 +1559,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                             channel.state = ChannelState::Closed;
                             self.inner
                                 .pending_messages
-                                .sender(self.notifier)
+                                .sender(self.notifier, self.inner.state.is_paused())
                                 .send_offer(channel, info.version);
                         }
                     }
@@ -1553,7 +1569,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                     // the saved state. This indicates the offer is meant to be
                     // fresh, so revoke and reoffer it.
                     let retain = revoke(
-                        self.inner.pending_messages.sender(self.notifier),
+                        self.inner
+                            .pending_messages
+                            .sender(self.notifier, self.inner.state.is_paused()),
                         offer_id,
                         channel,
                         &mut self.inner.gpadls,
@@ -1565,7 +1583,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                     // offer_channel was never called for this, but it was in
                     // the saved state. Revoke it.
                     let retain = revoke(
-                        self.inner.pending_messages.sender(self.notifier),
+                        self.inner
+                            .pending_messages
+                            .sender(self.notifier, self.inner.state.is_paused()),
                         offer_id,
                         channel,
                         &mut self.inner.gpadls,
@@ -1749,7 +1769,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
 
             self.inner
                 .pending_messages
-                .sender(self.notifier)
+                .sender(self.notifier, self.inner.state.is_paused())
                 .send_offer(channel, version);
         }
 
@@ -1761,7 +1781,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
     pub fn revoke_channel(&mut self, offer_id: OfferId) {
         let channel = &mut self.inner.channels[offer_id];
         let retain = revoke(
-            self.inner.pending_messages.sender(self.notifier),
+            self.inner
+                .pending_messages
+                .sender(self.notifier, self.inner.state.is_paused()),
             offer_id,
             channel,
             &mut self.inner.gpadls,
@@ -1784,16 +1806,26 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                 reserved_state,
             } => {
                 let channel_id = channel.info.expect("assigned").channel_id;
-                tracing::info!(
-                    offer_id = offer_id.0,
-                    channel_id = channel_id.0,
-                    result,
-                    "opened channel"
-                );
+                if result >= 0 {
+                    tracelimit::info_ratelimited!(
+                        offer_id = offer_id.0,
+                        channel_id = channel_id.0,
+                        result,
+                        "opened channel"
+                    );
+                } else {
+                    // Log channel open failures at error level for visibility.
+                    tracelimit::error_ratelimited!(
+                        offer_id = offer_id.0,
+                        channel_id = channel_id.0,
+                        result,
+                        "failed to open channel"
+                    );
+                }
 
                 self.inner
                     .pending_messages
-                    .sender(self.notifier)
+                    .sender(self.notifier, self.inner.state.is_paused())
                     .send_open_result(
                         channel_id,
                         &request,
@@ -1920,7 +1952,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                     // Handle closing reserved channels while disconnected/ing. Since we weren't waiting
                     // on the channel, no need to call check_disconnected, but we do need to release it.
                     if Self::client_release_channel(
-                        self.inner.pending_messages.sender(self.notifier),
+                        self.inner
+                            .pending_messages
+                            .sender(self.notifier, self.inner.state.is_paused()),
                         offer_id,
                         channel,
                         &mut self.inner.gpadls,
@@ -2151,6 +2185,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                 modifying: false,
                 offers_sent: false,
                 client_id: request.client_id,
+                paused: false,
             },
             next_action: ConnectionAction::None,
         };
@@ -2237,18 +2272,20 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             .find(|v| request.version_requested == **v as u32)
             .copied()?;
 
+        // The max version may be limited in order to test older protocol versions.
+        if let Some(max_version) = self.inner.max_version {
+            if version as u32 > max_version.version {
+                return None;
+            }
+        }
+
         let supported_flags = if version >= Version::Copper {
-            // The max version and features may be limited in order to test older protocol versions.
-            //
-            // N.B. Confidential channels should only be enabled if the connection is trusted.
+            // Confidential channels should only be enabled if the connection is trusted.
             let max_supported_flags =
                 SUPPORTED_FEATURE_FLAGS.with_confidential_channels(request.trusted);
 
+            // The max features may be limited in order to test older protocol versions.
             if let Some(max_version) = self.inner.max_version {
-                if version as u32 > max_version.version {
-                    return None;
-                }
-
                 max_supported_flags & max_version.feature_flags
             } else {
                 max_supported_flags
@@ -2325,7 +2362,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             // Release reserved channels only if the VM is resetting
             (!vm_reset && channel.state.is_reserved())
                 || !Self::client_release_channel(
-                    self.inner.pending_messages.sender(self.notifier),
+                    self.inner
+                        .pending_messages
+                        .sender(self.notifier, self.inner.state.is_paused()),
                     offer_id,
                     channel,
                     gpadls,
@@ -2479,7 +2518,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             channel.state = ChannelState::Closed;
             self.inner
                 .pending_messages
-                .sender(self.notifier)
+                .sender(self.notifier, info.paused)
                 .send_offer(channel, info.version);
         }
         self.sender().send_message(&protocol::AllOffersDelivered {});
@@ -2552,7 +2591,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
 
         if done
             && !Self::gpadl_updated(
-                self.inner.pending_messages.sender(self.notifier),
+                self.inner
+                    .pending_messages
+                    .sender(self.notifier, self.inner.state.is_paused()),
                 offer_id,
                 channel,
                 input.gpadl_id,
@@ -2587,7 +2628,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
         if gpadl.append(range)? {
             self.inner.incomplete_gpadls.remove(&input.gpadl_id);
             if !Self::gpadl_updated(
-                self.inner.pending_messages.sender(self.notifier),
+                self.inner
+                    .pending_messages
+                    .sender(self.notifier, self.inner.state.is_paused()),
                 offer_id,
                 channel,
                 input.gpadl_id,
@@ -2839,11 +2882,11 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             ChannelState::Revoked | ChannelState::Reoffered => {}
 
             ChannelState::Open { .. } | ChannelState::Opening { .. } => {
-                return Err(ChannelError::ChannelAlreadyOpen)
+                return Err(ChannelError::ChannelAlreadyOpen);
             }
 
             ChannelState::Closing { .. } | ChannelState::ClosingReopen { .. } => {
-                return Err(ChannelError::InvalidChannelState)
+                return Err(ChannelError::InvalidChannelState);
             }
 
             ChannelState::ClientReleased
@@ -3005,7 +3048,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             | ChannelState::Closing { .. }
             | ChannelState::Reoffered => {
                 if Self::client_release_channel(
-                    self.inner.pending_messages.sender(self.notifier),
+                    self.inner
+                        .pending_messages
+                        .sender(self.notifier, self.inner.state.is_paused()),
                     offer_id,
                     channel,
                     &mut self.inner.gpadls,
@@ -3033,7 +3078,19 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
     /// Handles MessageType::TL_CONNECT_REQUEST, which requests for an hvsocket
     /// connection.
     fn handle_tl_connect_request(&mut self, request: protocol::TlConnectRequest2) {
-        self.notifier.notify_hvsock(&request.into());
+        let version = self
+            .inner
+            .state
+            .get_version()
+            .expect("must be connected")
+            .version;
+
+        let hosted_silo_unaware = version < Version::Win10Rs5;
+        self.notifier
+            .notify_hvsock(&HvsockConnectRequest::from_message(
+                request,
+                hosted_silo_unaware,
+            ));
     }
 
     /// Sends a message to the guest if an hvsocket connect request failed.
@@ -3239,6 +3296,18 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
         }
     }
 
+    fn handle_pause(&mut self) {
+        tracelimit::info_ratelimited!("pausing sending messages");
+        self.sender().send_message(&protocol::PauseResponse {});
+        let ConnectionState::Connected(info) = &mut self.inner.state else {
+            unreachable!(
+                "in unexpected state {:?}, should be prevented by Message::parse()",
+                self.inner.state
+            );
+        };
+        info.paused = true;
+    }
+
     /// Processes an incoming message from the guest.
     pub fn handle_synic_message(&mut self, message: SynicMessage) -> Result<(), ChannelError> {
         assert!(!self.is_resetting());
@@ -3251,8 +3320,27 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
         //
         // TODO: Don't allow trusted messages if an untrusted connection was ever used.
         if self.inner.state.is_trusted() && !message.trusted {
-            tracing::warn!(?msg, "Received untrusted message");
+            tracelimit::warn_ratelimited!(?msg, "Received untrusted message");
             return Err(ChannelError::UntrustedMessage);
+        }
+
+        // Unpause channel responses if they are paused.
+        match &mut self.inner.state {
+            ConnectionState::Connected(info) if info.paused => {
+                if !matches!(
+                    msg,
+                    Message::Resume(..)
+                        | Message::Unload(..)
+                        | Message::InitiateContact { .. }
+                        | Message::InitiateContact2 { .. }
+                ) {
+                    tracelimit::warn_ratelimited!(?msg, "Received message while paused");
+                    return Err(ChannelError::Paused);
+                }
+                tracelimit::info_ratelimited!("resuming sending messages");
+                info.paused = false;
+            }
+            _ => {}
         }
 
         match msg {
@@ -3282,6 +3370,8 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             Message::CloseReservedChannel(input, ..) => {
                 self.handle_close_reserved_channel(&input)?
             }
+            Message::Pause(protocol::Pause, ..) => self.handle_pause(),
+            Message::Resume(protocol::Resume, ..) => {}
             // Messages that should only be received by a vmbus client.
             Message::OfferChannel(..)
             | Message::RescindChannelOffer(..)
@@ -3295,7 +3385,8 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
             | Message::CloseReservedChannelResponse(..)
             | Message::TlConnectResult(..)
             | Message::ModifyChannelResponse(..)
-            | Message::ModifyConnectionResponse(..) => {
+            | Message::ModifyConnectionResponse(..)
+            | Message::PauseResponse(..) => {
                 unreachable!("Server received client message {:?}", msg);
             }
         }
@@ -3335,7 +3426,7 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
                     .channel_id;
                 self.inner
                     .pending_messages
-                    .sender(self.notifier)
+                    .sender(self.notifier, self.inner.state.is_paused())
                     .send_gpadl_created(channel_id, gpadl_id, status);
                 if status >= 0 {
                     gpadl.state = GpadlState::Accepted;
@@ -3412,7 +3503,9 @@ impl<'a, N: 'a + Notifier> ServerWithNotifier<'a, N> {
     /// If you cannot borrow all of `self`, you will need to use the `PendingMessages::sender`
     /// method instead.
     fn sender(&mut self) -> MessageSender<'_, N> {
-        self.inner.pending_messages.sender(self.notifier)
+        self.inner
+            .pending_messages
+            .sender(self.notifier, self.inner.state.is_paused())
     }
 }
 
@@ -3485,10 +3578,15 @@ struct PendingMessages(VecDeque<OutgoingMessage>);
 
 impl PendingMessages {
     /// Creates a sender for the specified notifier.
-    fn sender<'a, N: Notifier>(&'a mut self, notifier: &'a mut N) -> MessageSender<'a, N> {
+    fn sender<'a, N: Notifier>(
+        &'a mut self,
+        notifier: &'a mut N,
+        is_paused: bool,
+    ) -> MessageSender<'a, N> {
         MessageSender {
             notifier,
             pending_messages: self,
+            is_paused,
         }
     }
 }
@@ -3498,6 +3596,7 @@ impl PendingMessages {
 struct MessageSender<'a, N> {
     notifier: &'a mut N,
     pending_messages: &'a mut PendingMessages,
+    is_paused: bool,
 }
 
 impl<N: Notifier> MessageSender<'_, N> {
@@ -3510,10 +3609,13 @@ impl<N: Notifier> MessageSender<'_, N> {
     ) {
         let message = OutgoingMessage::new(msg);
 
+        tracing::trace!(typ = ?T::MESSAGE_TYPE, ?msg, "sending message");
         // Don't try to send the message if there are already pending messages.
         if !self.pending_messages.0.is_empty()
+            || self.is_paused
             || !self.notifier.send_message(&message, MessageTarget::Default)
         {
+            tracing::trace!("message queued");
             // Queue the message for retry later.
             self.pending_messages.0.push_back(message);
         }
@@ -3527,11 +3629,12 @@ impl<N: Notifier> MessageSender<'_, N> {
         msg: &T,
         target: MessageTarget,
     ) {
-        tracing::trace!(typ = ?T::MESSAGE_TYPE, ?msg, "sending message");
         if target == MessageTarget::Default {
             self.send_message(msg);
         } else {
-            // Messages for other targets are not queued.
+            tracing::trace!(typ = ?T::MESSAGE_TYPE, ?msg, "sending message");
+            // Messages for other targets are not queued, nor are they affected
+            // by the paused state.
             let message = OutgoingMessage::new(msg);
             if !self.notifier.send_message(&message, target) {
                 tracelimit::warn_ratelimited!(?target, "failed to send message");

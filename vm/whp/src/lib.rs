@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+#![expect(missing_docs)]
 #![cfg(windows)]
 // UNSAFETY: Calling WHP APIs.
 #![expect(unsafe_code)]
@@ -25,9 +26,9 @@ use std::marker::PhantomData;
 use std::num::NonZeroI32;
 use std::num::NonZeroU16;
 use std::os::windows::prelude::*;
+use std::ptr::NonNull;
 use std::ptr::null;
 use std::ptr::null_mut;
-use std::ptr::NonNull;
 use winapi::shared::guiddef::GUID;
 use winapi::shared::ntdef::LUID;
 use winapi::shared::winerror;

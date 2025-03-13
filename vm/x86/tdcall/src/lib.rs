@@ -4,10 +4,10 @@
 //! Common TDCALL handling for issuing tdcalls and functionality using tdcalls.
 
 #![no_std]
-#![warn(missing_docs)]
 
 use hvdef::HV_PAGE_SIZE;
 use memory_range::MemoryRange;
+use x86defs::tdx::TDX_SHARED_GPA_BOUNDARY_ADDRESS_BIT;
 use x86defs::tdx::TdCallLeaf;
 use x86defs::tdx::TdCallResult;
 use x86defs::tdx::TdCallResultCode;
@@ -22,7 +22,6 @@ use x86defs::tdx::TdgMemPageGpaAttr;
 use x86defs::tdx::TdgMemPageLevel;
 use x86defs::tdx::TdxExtendedFieldCode;
 use x86defs::tdx::TdxGlaListInfo;
-use x86defs::tdx::TDX_SHARED_GPA_BOUNDARY_ADDRESS_BIT;
 
 /// Input to a tdcall. This is not defined in the TDX specification, but a
 /// contract between callers of this module and this module's handling of
