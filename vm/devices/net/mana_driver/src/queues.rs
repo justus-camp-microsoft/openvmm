@@ -110,19 +110,19 @@ impl DoorbellPage {
 #[mesh(package = "underhill")]
 pub struct CqEqSavedState {
     #[mesh(1)]
-    doorbell: DoorbellSavedState,
+    pub doorbell: DoorbellSavedState,
     #[mesh(2)]
-    doorbell_addr: u32,
+    pub doorbell_addr: u32,
     #[mesh(4)]
-    mem: MemoryBlockSavedState,
+    pub mem: MemoryBlockSavedState,
     #[mesh(5)]
-    id: u32,
+    pub id: u32,
     #[mesh(6)]
-    next: u32,
+    pub next: u32,
     #[mesh(7)]
-    size: u32,
+    pub size: u32,
     #[mesh(8)]
-    shift: u32,
+    pub shift: u32,
 }
 
 /// An event queue.

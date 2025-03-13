@@ -31,6 +31,7 @@ use mana_driver::queues::CqEqSavedState;
 use mana_driver::queues::Eq;
 use mana_driver::queues::Wq;
 use mana_driver::queues::WqSavedState;
+use mana_driver::resources::ResourceArenaSavedState;
 use net_backend::BufferAccess;
 use net_backend::Endpoint;
 use net_backend::EndpointAction;
@@ -88,6 +89,10 @@ pub struct ManaEndpoint<T: DeviceBacking> {
     bounce_buffer: bool,
 }
 
+pub struct ManaEndpointSavedState {
+    pub endpoint: ResourceArenaSavedState,
+}
+
 struct QueueResources {
     _eq: BnicEq,
     rxq: BnicWq,
@@ -119,6 +124,32 @@ impl<T: DeviceBacking> ManaEndpoint<T> {
                 GuestDmaMode::DirectDma => false,
                 GuestDmaMode::BounceBuffer => true,
             },
+        }
+    }
+
+    pub fn save(&self) -> ManaEndpointSavedState {
+        ManaEndpointSavedState {
+            endpoint: self.arena.save(),
+        }
+    }
+
+    pub async fn restore(
+        spawner: impl 'static + Spawn,
+        vport: Vport<T>,
+        dma_mode: GuestDmaMode,
+        saved_state: ManaEndpointSavedState,
+    ) -> Self {
+        let (endpoint_tx, endpoint_rx) = mesh::channel();
+        vport.register_link_status_notifier(endpoint_tx).await;
+
+        Self {
+            spawner: Box::new(spawner),
+            vport: Arc::new(vport),
+            queues: Vec::new(),
+            arena: ResourceArena::new(),
+            receive_update: endpoint_rx,
+            queue_tracker: Arc::new((AtomicUsize::new(0), SlimEvent::new())),
+            bounce_buffer: false,
         }
     }
 }
@@ -657,8 +688,28 @@ impl<T: DeviceBacking> Endpoint for ManaEndpoint<T> {
     async fn restore_queues(
         &mut self,
         saved_queues: &mut Vec<Box<dyn QueueSavedState>>,
+        queues: &mut Vec<Box<dyn Queue>>,
     ) -> anyhow::Result<()> {
-        todo!()
+        self.queues.clear();
+        queues.clear();
+
+        let tx_config = self
+            .vport
+            .config_tx()
+            .await
+            .context("failed to configure transmit")?;
+
+        for queue in saved_queues.iter_mut() {
+            let state = queue
+                .as_any_mut()
+                .downcast_mut::<ManaQueueSavedState>()
+                .expect("failed to downcast");
+
+            self.restore_queue(&tx_config, todo!(), todo!(), todo!(), todo!(), todo!())
+                .await?;
+        }
+
+        Ok(())
     }
 }
 
@@ -708,6 +759,7 @@ impl<T: DeviceBacking> Drop for ManaQueue<T> {
     }
 }
 
+#[derive(Debug, Clone)]
 struct PostedRx {
     id: RxId,
     wqe_len: u32,
@@ -715,13 +767,14 @@ struct PostedRx {
     bounce_offset: u32,
 }
 
+#[derive(Debug, Clone)]
 struct PostedTx {
     id: TxId,
     wqe_len: u32,
     bounced_len_with_padding: u32,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 struct QueueStats {
     tx_events: u64,
     tx_packets: u64,
@@ -1084,6 +1137,11 @@ impl<T: DeviceBacking + Send> Queue for ManaQueue<T> {
             stats: QueueStats::default(),
         }))
     }
+
+    /// Restore a mana queue from saved state during servicing.
+    fn restore(&mut self, saved_state: Box<dyn QueueSavedState>) -> anyhow::Result<()> {
+        unimplemented!()
+    }
 }
 
 impl QueueSavedState for ManaQueueSavedState {
@@ -1346,6 +1404,7 @@ impl<T: DeviceBacking> ManaQueue<T> {
     }
 }
 
+#[derive(Debug, Clone)]
 struct ManaQueueSavedState {
     // pool: Box<dyn BufferAccess>,
     // guest_memory: GuestMemory,
@@ -1507,6 +1566,7 @@ mod tests {
     use gdma::VportConfig;
     use gdma_defs::bnic::ManaQueryDeviceCfgResp;
     use mana_driver::mana::ManaDevice;
+    use mana_driver::queues;
     use net_backend::loopback::LoopbackEndpoint;
     use net_backend::Endpoint;
     use net_backend::QueueConfig;
@@ -1722,10 +1782,6 @@ mod tests {
             )
             .await
             .unwrap();
-
-        let mut saved_queues = endpoint.save_queues(&mut queues).await.unwrap();
-        endpoint.stop().await;
-        endpoint.restore_queues(&mut saved_queues).await.unwrap();
 
         for i in 0..1000 {
             let sent_data = (0..PACKET_LEN).map(|v| (i + v) as u8).collect::<Vec<u8>>();

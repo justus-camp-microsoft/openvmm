@@ -7,6 +7,7 @@ use gdma_defs::GdmaDevId;
 use gdma_defs::GdmaQueueType;
 use std::mem::ManuallyDrop;
 use user_driver::memory::MemoryBlock;
+use user_driver::memory::MemoryBlockSavedState;
 use user_driver::DeviceBacking;
 
 /// A list of allocated device resources.
@@ -21,8 +22,102 @@ pub struct ResourceArena {
     resources: Vec<Resource>,
 }
 
-pub(crate) enum Resource {
+#[derive(Debug, Clone)]
+pub struct ResourceArenaSavedState {
+    pub resources: Vec<SavedResource>,
+}
+
+pub enum Resource {
     MemoryBlock(ManuallyDrop<MemoryBlock>),
+    DmaRegion {
+        dev_id: GdmaDevId,
+        gdma_region: u64,
+    },
+    Eq {
+        dev_id: GdmaDevId,
+        eq_id: u32,
+    },
+    BnicQueue {
+        dev_id: GdmaDevId,
+        wq_type: GdmaQueueType,
+        wq_obj: u64,
+    },
+}
+
+impl Resource {
+    fn to_saved_resource(&self) -> SavedResource {
+        match self {
+            Resource::MemoryBlock(mem) => SavedResource::MemoryBlock(mem.save()),
+            Resource::DmaRegion {
+                dev_id,
+                gdma_region,
+            } => SavedResource::DmaRegion {
+                dev_id: *dev_id,
+                gdma_region: *gdma_region,
+            },
+            Resource::Eq { dev_id, eq_id } => SavedResource::Eq {
+                dev_id: *dev_id,
+                eq_id: *eq_id,
+            },
+            Resource::BnicQueue {
+                dev_id,
+                wq_type,
+                wq_obj,
+            } => SavedResource::BnicQueue {
+                dev_id: *dev_id,
+                wq_type: *wq_type,
+                wq_obj: *wq_obj,
+            },
+        }
+    }
+}
+
+impl ResourceArenaSavedState {
+    /// Restores the state of the resource arena.
+    pub fn restore<T: DeviceBacking>(
+        self,
+        gdma: &mut GdmaDriver<T>,
+    ) -> anyhow::Result<ResourceArena> {
+        let mut arena = ResourceArena::new();
+        for resource in self.resources {
+            match resource {
+                SavedResource::MemoryBlock(mem) => {
+                    let dma_client = gdma.device().dma_client();
+                    let mem = dma_client.attach_dma_buffer(mem.len, mem.base)?;
+                    arena.push(Resource::MemoryBlock(ManuallyDrop::new(mem)));
+                }
+                SavedResource::DmaRegion {
+                    dev_id,
+                    gdma_region,
+                } => {
+                    arena.push(Resource::DmaRegion {
+                        dev_id,
+                        gdma_region,
+                    });
+                }
+                SavedResource::Eq { dev_id, eq_id } => {
+                    arena.push(Resource::Eq { dev_id, eq_id });
+                }
+                SavedResource::BnicQueue {
+                    dev_id,
+                    wq_type,
+                    wq_obj,
+                } => {
+                    arena.push(Resource::BnicQueue {
+                        dev_id,
+                        wq_type,
+                        wq_obj,
+                    });
+                }
+            }
+        }
+        Ok(arena)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum SavedResource {
+    MemoryBlock(MemoryBlockSavedState),
     DmaRegion {
         dev_id: GdmaDevId,
         gdma_region: u64,
@@ -90,6 +185,16 @@ impl ResourceArena {
                     "failed to tear down resource"
                 );
             }
+        }
+    }
+
+    pub fn save(&self) -> ResourceArenaSavedState {
+        ResourceArenaSavedState {
+            resources: self
+                .resources
+                .iter()
+                .map(|r| r.to_saved_resource())
+                .collect(),
         }
     }
 }

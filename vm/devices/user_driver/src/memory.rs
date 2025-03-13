@@ -101,7 +101,7 @@ pub struct MemoryBlockSavedState {
     #[mesh(1)]
     pub base: u64,
     #[mesh(2)]
-    pub len: u64,
+    pub len: usize,
     #[mesh(3)]
     pub pfns: Vec<u64>,
     #[mesh(4)]
@@ -145,7 +145,7 @@ impl MemoryBlock {
     pub fn save(&self) -> MemoryBlockSavedState {
         MemoryBlockSavedState {
             base: self.base as u64,
-            len: self.len as u64,
+            len: self.len,
             pfns: self.mem.pfns().to_vec(),
             pfn_bias: self.mem.pfn_bias(),
         }

@@ -115,6 +115,7 @@ pub trait Endpoint: Send + Sync + InspectMut {
     async fn restore_queues(
         &mut self,
         saved_queues: &mut Vec<Box<dyn QueueSavedState>>,
+        queues: &mut Vec<Box<dyn Queue>>,
     ) -> anyhow::Result<()> {
         todo!()
     }
@@ -189,7 +190,7 @@ pub trait Queue: Send + InspectMut {
 }
 
 /// Base trait for all queue saved states
-pub trait QueueSavedState: Send + Sync {
+pub trait QueueSavedState: Send + Sync + std::fmt::Debug {
     /// Convert to Any for downcasting
     fn as_any(&self) -> &dyn std::any::Any;
 

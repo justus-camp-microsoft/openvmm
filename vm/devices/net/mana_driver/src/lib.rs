@@ -7,9 +7,9 @@
 #![warn(missing_docs)]
 
 mod bnic_driver;
-mod gdma_driver;
+pub mod gdma_driver;
 pub mod mana;
 pub mod queues;
-mod resources;
+pub mod resources;
 #[cfg(test)]
 mod tests;

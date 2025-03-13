@@ -72,6 +72,11 @@ async fn create_mana_device(
 ) -> anyhow::Result<ManaDevice<VfioDevice>> {
     // Don't do anything to the device in servicing mode
     if let Some(mana_state) = mana_state {
+        tracing::info!(
+            "Restoring mana device and skipping reset with pci_id {:?}",
+            pci_id
+        );
+
         return try_create_mana_device(
             driver_source,
             pci_id,
