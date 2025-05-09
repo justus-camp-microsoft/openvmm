@@ -1173,9 +1173,10 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         while self.test_events == n {
             self.process_eqs_or_wait().await.with_context(|| {
                 format!(
-                    "HWC request failed. request={:#x}, activity_id={:#x}",
+                    "HWC request failed. request={:#x}, activity_id={:#x}, queue_index={:#x}",
                     GdmaRequestType::GDMA_GENERATE_TEST_EQE.0,
-                    self.hwc_activity_id
+                    self.hwc_activity_id,
+                    self.eq.id()
                 )
             })?;
         }

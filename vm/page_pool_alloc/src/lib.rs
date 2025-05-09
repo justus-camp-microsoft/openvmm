@@ -180,9 +180,11 @@ pub mod save_restore {
                 .collect();
 
             if mapping_offset != self.inner.mapping.len() as u64 {
-                return Err(vmcore::save_restore::RestoreError::InvalidSavedState(
-                    anyhow::anyhow!("missing slots in saved state"),
-                ));
+                tracing::warn!(
+                    mapping_offset,
+                    expected = self.inner.mapping.len(),
+                    "mapping offset does not match saved state"
+                );
             }
 
             Ok(())

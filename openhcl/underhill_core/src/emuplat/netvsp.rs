@@ -677,6 +677,10 @@ impl HclNetworkVFManagerWorker {
                             .expect("should have a device present to save state");
                         let saved_state = mana_device.save().await.unwrap();
 
+                        // Closing the VFIO device handle can take a long time. Leak the handle by
+                        // stashing it away.
+                        std::mem::forget(mana_device);
+
                         ManaSavedState {
                             pci_id: self.vtl2_pci_id.clone(),
                             mana_device: saved_state,

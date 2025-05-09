@@ -82,8 +82,6 @@ impl<T: DeviceBacking> ManaDevice<T> {
         let mut gdma = if let Some(ref mana_state) = saved_state {
             let memory = device.dma_client().attach_pending_buffers()?;
 
-            tracing::info!("restored memory: {:#?}", memory);
-
             let gdma_memory = memory
                 .iter()
                 .find(|m| m.pfns()[0] == mana_state.gdma.mem.base_pfn)
@@ -95,9 +93,15 @@ impl<T: DeviceBacking> ManaDevice<T> {
             GdmaDriver::new(driver, device, num_vps, None).await?
         };
 
+        tracing::info!("restored gdma driver");
+
         gdma.test_eq().await?;
 
+        tracing::info!("gdma test eq passed");
+
         gdma.verify_vf_driver_version().await?;
+
+        tracing::info!("gdma driver version verified");
 
         let dev_id = gdma
             .list_devices()
@@ -167,7 +171,7 @@ impl<T: DeviceBacking> ManaDevice<T> {
     }
 
     /// Saves the device's state for servicing
-    pub async fn save(self) -> anyhow::Result<ManaDeviceSavedState> {
+    pub async fn save(&self) -> anyhow::Result<ManaDeviceSavedState> {
         let mut gdma = self.inner.gdma.lock().await;
         let gdma_saved_state = gdma.save().await?;
         let saved_state = ManaDeviceSavedState {
