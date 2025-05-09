@@ -487,8 +487,7 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         Ok(this)
     }
 
-    #[allow(dead_code)]
-    pub async fn save(mut self) -> anyhow::Result<GdmaDriverSavedState> {
+    pub async fn save(&mut self) -> anyhow::Result<GdmaDriverSavedState> {
         self.state_saved = true;
 
         let doorbell = self.bar0.save(Some(self.db_id as u64));
@@ -581,7 +580,6 @@ impl<T: DeviceBacking> GdmaDriver<T> {
         Ok((bar0_mapping, map))
     }
 
-    #[allow(dead_code)]
     pub async fn restore(
         saved_state: GdmaDriverSavedState,
         mut device: T,

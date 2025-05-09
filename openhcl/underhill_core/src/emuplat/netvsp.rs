@@ -153,6 +153,7 @@ async fn try_create_mana_device(
         device,
         vp_count,
         max_sub_channels + 1,
+        saved_state.map(|s| s.mana_device),
     )
     .instrument(tracing::info_span!("new_mana_device"))
     .await

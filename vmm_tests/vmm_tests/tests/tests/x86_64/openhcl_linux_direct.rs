@@ -48,6 +48,8 @@ async fn validate_mana_nic(agent: &PipetteClient) -> Result<(), anyhow::Error> {
     assert!(output.contains("inet addr:10.0.0.2"));
     assert!(output.contains("inet6 addr: fe80::215:5dff:fe12:1212/64"));
 
+    cmd!(sh, "wget --spider -q google.com").run().await?;
+
     Ok(())
 }
 
@@ -104,6 +106,39 @@ async fn mana_nic_servicing(
 
     vm.restart_openhcl(igvm_file, OpenHclServicingFlags::default())
         .await?;
+
+    validate_mana_nic(&agent).await?;
+
+    agent.power_off().await?;
+    assert_eq!(vm.wait_for_teardown().await?, HaltReason::PowerOff);
+
+    Ok(())
+}
+
+/// Test an OpenHCL Linux direct VM with a MANA nic assigned to VTL2 (backed by
+/// the MANA emulator), and vmbus relay. Perform servicing and validate that the
+/// nic is still functional.
+#[openvmm_test(openhcl_linux_direct_x64 [LATEST_LINUX_DIRECT_TEST_X64])]
+async fn mana_nic_servicing_keepalive(
+    config: PetriVmConfigOpenVmm,
+    (igvm_file,): (ResolvedArtifact<LATEST_LINUX_DIRECT_TEST_X64>,),
+) -> Result<(), anyhow::Error> {
+    let (mut vm, agent) = config
+        .with_vmbus_redirect()
+        .with_nic()
+        .with_openhcl_command_line("OPENHCL_ENABLE_VTL2_GPA_POOL=512 OPENHCL_MANA_KEEP_ALIVE=1")
+        .run()
+        .await?;
+
+    validate_mana_nic(&agent).await?;
+
+    vm.restart_openhcl(
+        igvm_file,
+        OpenHclServicingFlags {
+            enable_nvme_keepalive: false,
+        },
+    )
+    .await?;
 
     validate_mana_nic(&agent).await?;
 
