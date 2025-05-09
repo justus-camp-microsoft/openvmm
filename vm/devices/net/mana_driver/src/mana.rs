@@ -12,6 +12,7 @@ use crate::gdma_driver::GdmaDriver;
 use crate::queues;
 use crate::queues::Doorbell;
 use crate::queues::DoorbellPage;
+use crate::save_restore::ManaDeviceSavedState;
 use anyhow::Context;
 use futures::StreamExt;
 use futures::lock::Mutex;
@@ -139,6 +140,13 @@ impl<T: DeviceBacking> ManaDevice<T> {
             hwc_task: None,
         };
         Ok(device)
+    }
+
+    /// Saves the device's state for servicing
+    pub async fn save(self) -> anyhow::Result<ManaDeviceSavedState> {
+        let saved_state = ManaDeviceSavedState { gdma: todo!() };
+
+        Ok(saved_state)
     }
 
     /// Returns the number of vports the device supports.

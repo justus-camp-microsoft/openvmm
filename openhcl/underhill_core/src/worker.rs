@@ -86,6 +86,7 @@ use input_core::InputData;
 use input_core::MultiplexedInputHandle;
 use inspect::Inspect;
 use loader_defs::shim::MemoryVtlType;
+use mana_driver::save_restore::ManaSavedState;
 use memory_range::MemoryRange;
 use mesh::CancelContext;
 use mesh::MeshPayload;
@@ -732,6 +733,7 @@ impl UhVmNetworkSettings {
         driver_source: &VmTaskDriverSource,
         uevent_listener: &UeventListener,
         servicing_netvsp_state: &Option<Vec<crate::emuplat::netvsp::SavedState>>,
+        servicing_mana_state: Option<&ManaSavedState>,
         partition: Arc<UhPartition>,
         state_units: &StateUnits,
         tp: &AffinitizedThreadpool,
@@ -753,7 +755,7 @@ impl UhVmNetworkSettings {
             } else {
                 AllocationVisibility::Private
             },
-            persistent_allocations: false,
+            persistent_allocations: true,
         })?;
 
         let (vf_manager, endpoints, save_state) = HclNetworkVFManager::new(
@@ -766,6 +768,7 @@ impl UhVmNetworkSettings {
             vps_count as u32,
             nic_max_sub_channels,
             servicing_netvsp_state,
+            &servicing_mana_state.cloned(),
             self.dma_mode,
             dma_client,
         )
@@ -878,6 +881,7 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
         threadpool: &AffinitizedThreadpool,
         uevent_listener: &UeventListener,
         servicing_netvsp_state: &Option<Vec<crate::emuplat::netvsp::SavedState>>,
+        servicing_mana_state: &Option<ManaSavedState>,
         partition: Arc<UhPartition>,
         state_units: &StateUnits,
         vmbus_server: &Option<VmbusServerHandle>,
@@ -910,6 +914,7 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
                 &driver_source,
                 uevent_listener,
                 servicing_netvsp_state,
+                servicing_mana_state.as_ref(),
                 partition,
                 state_units,
                 threadpool,
@@ -967,6 +972,68 @@ impl LoadedVmNetworkSettings for UhVmNetworkSettings {
             params = manager.packet_capture(params).await?;
         }
         Ok(params)
+    }
+
+    async fn save(&mut self) -> Vec<ManaSavedState> {
+        let vf_managers: Vec<(Guid, Arc<HclNetworkVFManager>)> = self.vf_managers.drain().collect();
+
+        // Collect the instance_id of every vf_manager being shutdown
+        let instance_ids: Vec<Guid> = vf_managers
+            .iter()
+            .map(|(instance_id, _)| *instance_id)
+            .collect();
+
+        // Only remove the vmbus channels and NICs from the VF Managers
+        let mut nic_channels = Vec::new();
+        let mut i = 0;
+        while i < self.nics.len() {
+            if instance_ids.contains(&self.nics[i].0) {
+                let val = self.nics.remove(i);
+                nic_channels.push(val);
+            } else {
+                i += 1;
+            }
+        }
+
+        for instance_id in instance_ids {
+            if !nic_channels.iter().any(|(id, _)| *id == instance_id) {
+                tracing::error!(
+                    "No vmbus channel found that matches VF Manager instance_id: {instance_id}"
+                );
+            }
+        }
+
+        let mut endpoints: Vec<_> =
+            join_all(nic_channels.drain(..).map(async |(instance_id, channel)| {
+                async {
+                    let nic = channel.remove().await.revoke().await;
+                    nic.shutdown()
+                }
+                .instrument(tracing::info_span!("nic_shutdown", %instance_id))
+                .await
+            }))
+            .await;
+
+        let run_endpoints = async {
+            loop {
+                let _ = endpoints
+                    .iter_mut()
+                    .map(|endpoint| endpoint.wait_for_endpoint_action())
+                    .collect::<Vec<_>>()
+                    .race()
+                    .await;
+            }
+        };
+
+        let save_vf_managers = join_all(vf_managers.into_iter().map(|(_, vf_manager)| {
+            let manager = vf_manager.clone();
+            async move { manager.save().await }
+        }));
+
+        let state = (run_endpoints, save_vf_managers).race().await;
+        tracing::info!("save returned: {state:?}");
+
+        state
     }
 }
 
@@ -2790,6 +2857,15 @@ async fn new_underhill_vm(
     if !controllers.mana.is_empty() {
         let _span = tracing::info_span!("network_settings").entered();
         for nic_config in controllers.mana.into_iter() {
+            let servicing_mana_state = if let Some(ref state) = servicing_state.mana_state {
+                state
+                    .iter()
+                    .find(|s| s.pci_id == nic_config.pci_id)
+                    .cloned()
+            } else {
+                None
+            };
+
             let save_state = uh_network_settings
                 .add_network(
                     nic_config.instance_id,
@@ -2798,6 +2874,7 @@ async fn new_underhill_vm(
                     tp,
                     &uevent_listener,
                     &servicing_state.emuplat.netvsp_state,
+                    &servicing_mana_state,
                     partition.clone(),
                     &state_units,
                     &vmbus_server,

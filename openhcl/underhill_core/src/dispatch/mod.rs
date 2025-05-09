@@ -33,6 +33,7 @@ use hyperv_ic_resources::shutdown::ShutdownRpc;
 use hyperv_ic_resources::shutdown::ShutdownType;
 use igvm_defs::MemoryMapEntryType;
 use inspect::Inspect;
+use mana_driver::save_restore::ManaSavedState;
 use mesh::CancelContext;
 use mesh::MeshPayload;
 use mesh::error::RemoteError;
@@ -106,6 +107,7 @@ pub trait LoadedVmNetworkSettings: Inspect {
         threadpool: &AffinitizedThreadpool,
         uevent_listener: &UeventListener,
         servicing_netvsp_state: &Option<Vec<crate::emuplat::netvsp::SavedState>>,
+        servicing_mana_state: &Option<ManaSavedState>,
         partition: Arc<UhPartition>,
         state_units: &StateUnits,
         vmbus_server: &Option<VmbusServerHandle>,
@@ -124,6 +126,9 @@ pub trait LoadedVmNetworkSettings: Inspect {
         &self,
         mut params: PacketCaptureParams<Socket>,
     ) -> anyhow::Result<PacketCaptureParams<Socket>>;
+
+    /// Save the network state for restoration after servicing.
+    async fn save(&mut self) -> Vec<ManaSavedState>;
 }
 
 /// A VM that has been loaded and can be run.
@@ -696,6 +701,12 @@ impl LoadedVm {
             None
         };
 
+        let mana_state = if let Some(network_settings) = &mut self.network_settings {
+            Some(network_settings.save().await)
+        } else {
+            None
+        };
+
         let vmbus_client = if let Some(vmbus_client) = &mut self.vmbus_client {
             vmbus_client.stop().await;
             Some(vmbus_client.save().await)
@@ -715,6 +726,7 @@ impl LoadedVm {
                 nvme_state,
                 dma_manager_state,
                 vmbus_client,
+                mana_state,
             },
             units,
         };
@@ -775,6 +787,7 @@ impl LoadedVm {
                 max_sub_channels,
                 threadpool,
                 &self.uevent_listener,
+                &None, // VF getting added; no existing state
                 &None, // VF getting added; no existing state
                 self.partition.clone(),
                 &self.state_units,
