@@ -43,6 +43,12 @@ pub fn git_ls_files() -> anyhow::Result<Vec<PathBuf>> {
 
     macro_rules! as_set {
         ($cmd:literal) => {{
+            let working_dir = sh.current_dir();
+            log::info!(
+                "working directory for git_ls_files: {}",
+                working_dir.display()
+            );
+
             let output = xshell::cmd!(sh, $cmd).output()?.stdout;
             let output = String::from_utf8_lossy(&output).to_string();
             output
