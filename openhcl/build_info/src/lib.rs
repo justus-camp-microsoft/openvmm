@@ -21,6 +21,8 @@ pub struct BuildInfo {
     internal_scm_branch: &'static str,
     #[inspect(safe)]
     openhcl_version: &'static str,
+    #[inspect(safe)]
+    build_timestamp: &'static str,
 }
 
 impl BuildInfo {
@@ -56,6 +58,11 @@ impl BuildInfo {
             } else {
                 ""
             },
+            build_timestamp: if let Some(ts) = option_env!("BUILD_TIMESTAMP") {
+                ts
+            } else {
+                ""
+            },
         }
     }
 
@@ -69,6 +76,10 @@ impl BuildInfo {
 
     pub fn scm_branch(&self) -> &'static str {
         self.branch
+    }
+
+    pub fn build_timestamp(&self) -> &'static str {
+        self.build_timestamp
     }
 }
 
