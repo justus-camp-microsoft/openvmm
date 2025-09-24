@@ -32,6 +32,7 @@ use gdma_defs::Wqe;
 use gdma_defs::access::WqeAccess;
 use gdma_defs::bnic as bnic_defs;
 use gdma_defs::bnic::ManaDestroyWqobjReq;
+use gdma_defs::bnic::ManaQueryStatisticsResponse;
 use gdma_defs::bnic::ManaTxShortOob;
 use gdma_defs::bnic::Tristate;
 use guestmem::GuestMemory;
@@ -258,6 +259,20 @@ impl BasicNic {
                     short_form_allowed: 1,
                     reserved: 0,
                 };
+                write.write(resp.as_bytes())?;
+                size_of_val(&resp)
+            }
+            ManaCommandCode::MANA_QUERY_STATS => {
+                let req: gdma_defs::bnic::ManaQueryStatisticsRequest =
+                    read.read_plain().context("reading query stats request")?;
+
+                // Return a dummy response consisting entirely of zero counters.
+                // Report that we are reporting exactly what was requested.
+                let resp = ManaQueryStatisticsResponse {
+                    reported_statistics: req.requested_statistics,
+                    ..ManaQueryStatisticsResponse::default()
+                };
+
                 write.write(resp.as_bytes())?;
                 size_of_val(&resp)
             }

@@ -447,7 +447,7 @@ pub struct ManaQueryStatisticsRequest {
 }
 
 #[repr(C)]
-#[derive(IntoBytes, Immutable, KnownLayout, FromBytes)]
+#[derive(IntoBytes, Immutable, KnownLayout, FromBytes, Default)]
 pub struct ManaQueryStatisticsResponse {
     pub reported_statistics: u64,
     // In discards/errors
