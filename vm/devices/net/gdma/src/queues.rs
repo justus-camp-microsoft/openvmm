@@ -328,6 +328,25 @@ impl Queues {
         }
     }
 
+    /// Clears all allocated queues, returning the queue state to its
+    /// post-construction empty form. Any outstanding wakers are dropped.
+    ///
+    /// The HWC channel task should be stopped before calling this method.
+    pub fn reset_all(&self) {
+        for q in &self.sqs {
+            *q.lock() = None;
+        }
+        for q in &self.rqs {
+            *q.lock() = None;
+        }
+        for q in &self.cqs {
+            *q.lock() = None;
+        }
+        for q in &self.eqs {
+            *q.lock() = None;
+        }
+    }
+
     pub fn max_sqs(&self) -> u32 {
         self.sqs.len() as u32
     }

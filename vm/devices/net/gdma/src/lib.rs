@@ -360,7 +360,22 @@ impl ChangeDeviceState for GdmaDevice {
     async fn stop(&mut self) {}
 
     async fn reset(&mut self) {
-        todo!()
+        if self.hwc.is_running() {
+            self.hwc.stop().await;
+        }
+
+        if self.hwc.has_state() {
+            let _ = self.hwc.remove();
+        }
+
+        self.queues.reset_all();
+
+        self.shmem.0 = FromZeros::new_zeroed();
+        self.destroying_hwc = false;
+
+        self.config.reset();
+
+        tracing::info!("gdma: device reset complete");
     }
 }
 
