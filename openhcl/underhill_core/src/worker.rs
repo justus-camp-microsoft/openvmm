@@ -3328,7 +3328,8 @@ async fn new_underhill_vm(
                     &vmbus_server,
                     dma_manager.client_spawner(),
                     isolation.is_isolated(),
-                    env_cfg.mana_keep_alive.clone(),
+                    // HARDCODED: Always enable mana keepalive for internal testing
+                    KeepAliveConfig::EnabledHostAndPrivatePoolPresent,
                     nic_servicing_state,
                 )
                 .await?;
@@ -3549,7 +3550,8 @@ async fn new_underhill_vm(
 
         _periodic_telemetry_task: periodic_telemetry_task,
         nvme_keep_alive: env_cfg.nvme_keep_alive,
-        mana_keep_alive: env_cfg.mana_keep_alive,
+        // HARDCODED: Always enable mana keepalive for internal testing
+        mana_keep_alive: KeepAliveConfig::EnabledHostAndPrivatePoolPresent,
         test_configuration: env_cfg.test_configuration,
         dma_manager,
     };

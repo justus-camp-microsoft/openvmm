@@ -586,9 +586,11 @@ impl LoadedVm {
             self.nvme_keep_alive = KeepAliveConfig::Disabled
         };
 
-        if !capabilities_flags.enable_mana_keepalive() {
-            self.mana_keep_alive = KeepAliveConfig::Disabled
-        };
+        // HARDCODED: Always enable mana keepalive for internal testing
+        // if !capabilities_flags.enable_mana_keepalive() {
+        //     self.mana_keep_alive = KeepAliveConfig::Disabled
+        // };
+        self.mana_keep_alive = KeepAliveConfig::EnabledHostAndPrivatePoolPresent;
 
         // Do everything before the log flush under a span.
         let r = async {
