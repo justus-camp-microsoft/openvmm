@@ -1,8 +1,15 @@
 let
-  rust_overlay = import (builtins.fetchTarball
-    "https://github.com/oxalica/rust-overlay/archive/master.tar.gz");
-  # pkgs = import <nixpkgs> { crossSystem =  { config = "aarch64-unknown-linux-gnu"; }; overlays = [ rust_overlay ]; };
-  pkgs = import <nixpkgs> { overlays = [ rust_overlay ]; };
+  # Pinned nixpkgs for reproducibility (nixos-24.11 branch, 2025-01-21)
+  nixpkgs = fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/50ab793786d9de88ee30ec4e4c24fb4236fc2674.tar.gz";
+    sha256 = "1s2gr5rcyqvpr58vxdcb095mdhblij9bfzaximrva2243aal3dgx";
+  };
+  # Pinned rust-overlay (2025-01-21)
+  rust_overlay = import (builtins.fetchTarball {
+    url = "https://github.com/oxalica/rust-overlay/archive/2ef5b3362af585a83bafd34e7fc9b1f388c2e5e2.tar.gz";
+    sha256 = "138a0p83qzflw8wj4a7cainqanjmvjlincx8imr3yq1b924lg9cz";
+  });
+  pkgs = import nixpkgs { overlays = [ rust_overlay ]; };
 
   mdbook = pkgs.callPackage ./mdbook.nix { };
   mdbook_admonish = pkgs.callPackage ./mdbook_admonish.nix { };
@@ -15,12 +22,18 @@ let
   openvmm_deps = pkgs.callPackage ./openvmm_deps.nix { };
   uefi_mu_msvm = pkgs.callPackage ./uefi_mu_msvm.nix { };
 
-  glibc_2_39_52 = import (fetchTarball
-    "https://github.com/NixOS/nixpkgs/archive/ab7b6889ae9d484eed2876868209e33eb262511d.tar.gz")
-    { };
-
   overrides = (builtins.fromTOML (builtins.readFile ./Cargo.toml));
-  rustVersion = overrides.workspace.package.rust-version;
+  rustVersionFromCargo = overrides.workspace.package.rust-version;
+  # Cargo.toml uses "X.Y", rust-overlay uses "X.Y.Z"
+  # Find the latest patch version available for the given MAJOR.MINOR
+  availableVersions = builtins.attrNames pkgs.rust-bin.stable;
+  matchingVersions = builtins.filter
+    (v: pkgs.lib.hasPrefix "${rustVersionFromCargo}." v)
+    availableVersions;
+  rustVersion =
+    if builtins.length matchingVersions == 0
+    then throw "No rust version matching ${rustVersionFromCargo}.* found in rust-overlay"
+    else builtins.head (builtins.sort (a: b: a > b) matchingVersions);
   rust = pkgs.rust-bin.stable.${rustVersion}.default.override {
     extensions = [
       "rust-src" # for rust-analyzer
@@ -40,7 +53,6 @@ in pkgs.mkShell.override { } {
     git
     perl
     python3
-    rustup
     pkg-config
   ]);
   buildInputs = [

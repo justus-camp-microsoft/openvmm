@@ -3,10 +3,10 @@
 let
 
   arch = if system == "aarch64-linux" then "AARCH64" else "x64";
-  hash = if system == "aarch64-linux" then
-    "sha256-ybBnZZssTXrOxqH6NudmYljn92ejCjrazBIv/GNQyn4="
-  else
-    "sha256-ybBnZZssTXrOxqH6NudmYljn92ejCjrazBIv/GNQyn4=";
+  hash = {
+    "x86_64-linux" = "sha256-ybBnZZssTXrOxqH6NudmYljn92ejCjrazBIv/GNQyn4=";
+    "aarch64-linux" = throw "lxutil: aarch64-linux hash not yet computed - run 'nix-prefetch-url --unpack <url>' to get it";
+  }.${system};
 
 in stdenv.mkDerivation {
   pname = "lxutil";

@@ -1,21 +1,20 @@
-{ stdenv, fetchzip,
-#fetchFromGitHub
-}:
+{ system, stdenv, fetchzip, }:
 
-stdenv.mkDerivation {
-  pname = "mdbook-mermaid";
+let
   version = "0.14.0";
+  arch = if system == "aarch64-linux" then "aarch64-unknown-linux-gnu" else "x86_64-unknown-linux-gnu";
+  hash = {
+    "x86_64-linux" = "sha256-cbcPoLQ4b8cQ2xk0YnapC9L0Rayt0bblGXVfCzJLiGA=";
+    "aarch64-linux" = throw "mdbook-mermaid: aarch64-linux hash not yet computed - run 'nix-prefetch-url --unpack <url>' to get it";
+  }.${system};
 
-  # src = fetchFromGitHub {
-  #  owner = "badboy";
-  #  repo = "mdbook-mermaid";
-  #  rev = "v0.14.0";
-  #  sha256 = "elDKxtGMLka9Ss5CNnzw32ndxTUliNUgPXp7e4KUmBo=";
-  # };
+in stdenv.mkDerivation {
+  pname = "mdbook-mermaid";
+  inherit version;
+
   src = fetchzip {
-    url =
-      "https://github.com/badboy/mdbook-mermaid/releases/download/v0.14.0/mdbook-mermaid-v0.14.0-x86_64-unknown-linux-gnu.tar.gz";
-    hash = "sha256-cbcPoLQ4b8cQ2xk0YnapC9L0Rayt0bblGXVfCzJLiGA=";
+    url = "https://github.com/badboy/mdbook-mermaid/releases/download/v${version}/mdbook-mermaid-v${version}-${arch}.tar.gz";
+    inherit hash;
   };
 
   installPhase = ''

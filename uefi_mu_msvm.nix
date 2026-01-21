@@ -9,7 +9,7 @@ let
     "sha256-wJeRZC6sd+tNSYHdyyN4Qj/sn5puT6R8eagFlHa6pP4=";
 
 in stdenv.mkDerivation {
-  pname = "openvmm-deps";
+  pname = "uefi-mu-msvm";
   version = "24.0.4";
 
   src = fetchzip {

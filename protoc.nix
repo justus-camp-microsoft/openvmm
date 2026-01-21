@@ -1,14 +1,21 @@
-{ stdenv, fetchzip, }:
+{ system, stdenv, fetchzip, }:
 
-stdenv.mkDerivation {
-  pname = "protoc";
+let
   version = "27.1";
+  arch = if system == "aarch64-linux" then "linux-aarch_64" else "linux-x86_64";
+  hash = {
+    "x86_64-linux" = "sha256-jk1VHYxOMo7C6mr1EVL97I2+osYz7lRtQLULv91gFH4=";
+    "aarch64-linux" = throw "protoc: aarch64-linux hash not yet computed - run 'nix-prefetch-url --unpack <url>' to get it";
+  }.${system};
+
+in stdenv.mkDerivation {
+  pname = "protoc";
+  inherit version;
 
   src = fetchzip {
-    url =
-      "https://github.com/protocolbuffers/protobuf/releases/download/v27.1/protoc-27.1-linux-x86_64.zip";
+    url = "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/protoc-${version}-${arch}.zip";
     stripRoot = false;
-    hash = "sha256-jk1VHYxOMo7C6mr1EVL97I2+osYz7lRtQLULv91gFH4=";
+    inherit hash;
   };
 
   installPhase = ''

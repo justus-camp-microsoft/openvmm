@@ -10,24 +10,29 @@ let
     "https://github.com/microsoft/OHCL-Linux-Kernel/releases/download/rolling-lts/${branch}/${version}/Microsoft.OHCL.Kernel${
       if is_dev then ".Dev" else ""
     }.${version}-${if is_cvm then "cvm-" else ""}${arch}.tar.gz";
-  hash = {
+  hashes = {
     hcl-main = {
       std = {
         x64 = "sha256-An1N76i1MPb+rrQ1nBpoiuxnNeD0E+VuwqXdkPzaZn0=";
         arm64 = "sha256-ENjd+Pd9sQ/f0Gvyq0iB+IG7c4p+AxwxoWu87pZSXYQ=";
       };
-      cvm = { x64 = "sha256-pV/20epW9LYWzwA633MYxtaUCyMaLAWaaSEJyx+rniQ="; };
+      cvm = {
+        x64 = "sha256-pV/20epW9LYWzwA633MYxtaUCyMaLAWaaSEJyx+rniQ=";
+        arm64 = throw "openhcl-kernel: cvm arm64 variant not available";
+      };
     };
     hcl-dev = {
       std = {
         x64 = "sha256-Ow9piuc2IDR4RPISKY5EAQ5ykjitem4CXS9974lvwPE=";
-        arm64 = "";
+        arm64 = throw "openhcl-kernel: dev arm64 variant not available";
       };
       cvm = {
         x64 = "sha256-IryjvoFDSghhVucKlIG9V0IzcVuf8m8Cmk5NhhWzTQM=";
+        arm64 = throw "openhcl-kernel: dev cvm arm64 variant not available";
       };
     };
-  }.${branch}.${build_type}.${arch};
+  };
+  hash = hashes.${branch}.${build_type}.${arch};
 
 in stdenv.mkDerivation {
   pname = "openhcl-kernel";
