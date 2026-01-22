@@ -74,11 +74,8 @@ impl FlowNode for Node {
                                         FlowPlatformLinuxDistro::Arch => {
                                             match_arch!(host_arch, FlowArch::X86_64, "gcc")
                                         }
-                                        FlowPlatformLinuxDistro::Nix => {
-                                            anyhow::bail!(
-                                                "Cross-compilation for Linux is not yet supported in Nix environments"
-                                            )
-                                        }
+                                        // Nix shell.nix provides cross-compilers, no package to install
+                                        FlowPlatformLinuxDistro::Nix => "",
                                         FlowPlatformLinuxDistro::Unknown => {
                                             anyhow::bail!("Unknown Linux distribution")
                                         }
@@ -99,11 +96,8 @@ impl FlowNode for Node {
                                             FlowArch::X86_64,
                                             "aarch64-linux-gnu-gcc"
                                         ),
-                                        FlowPlatformLinuxDistro::Nix => {
-                                            anyhow::bail!(
-                                                "Cross-compilation for Linux is not yet supported in Nix environments"
-                                            )
-                                        }
+                                        // Nix shell.nix provides cross-compilers, no package to install
+                                        FlowPlatformLinuxDistro::Nix => "",
                                         FlowPlatformLinuxDistro::Unknown => {
                                             anyhow::bail!("Unknown Linux distribution")
                                         }
@@ -124,12 +118,16 @@ impl FlowNode for Node {
                         // * The only Rust `aarch64` targets that produce
                         //   position-independent static ELF binaries with no std are
                         //   `aarch64-unknown-linux-*`.
-                        pre_build_deps.push(ctx.reqv(|v| {
-                            flowey_lib_common::install_dist_pkg::Request::Install {
-                                package_names: vec![gcc_pkg],
-                                done: v,
-                            }
-                        }));
+                        //
+                        // Skip package installation for Nix (shell.nix provides cross-compilers)
+                        if !gcc_pkg.is_empty() {
+                            pre_build_deps.push(ctx.reqv(|v| {
+                                flowey_lib_common::install_dist_pkg::Request::Install {
+                                    package_names: vec![gcc_pkg],
+                                    done: v,
+                                }
+                            }));
+                        }
 
                         // when cross compiling for gnu linux, explicitly set the
                         // linker being used.

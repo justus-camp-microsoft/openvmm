@@ -1,11 +1,11 @@
 { system, stdenv, fetchzip, }:
 
 let
-  version = "0.14.0";
-  arch = if system == "aarch64-linux" then "aarch64-unknown-linux-gnu" else "x86_64-unknown-linux-gnu";
+  version = "0.17.0";
+  arch = if system == "aarch64-linux" then "aarch64-unknown-linux-musl" else "x86_64-unknown-linux-gnu";
   hash = {
-    "x86_64-linux" = "sha256-cbcPoLQ4b8cQ2xk0YnapC9L0Rayt0bblGXVfCzJLiGA=";
-    "aarch64-linux" = throw "mdbook-mermaid: aarch64-linux hash not yet computed - run 'nix-prefetch-url --unpack <url>' to get it";
+    "x86_64-linux" = "sha256-eqO3OU9VPCSN+1zfqK0aOkAvJ7tmB7W/ieDLPejJYV4=";
+    "aarch64-linux" = "sha256-3TSbAzUZfX/oEut0AVLuAHQlahoJaonZp2lTpBkg2q0=";
   }.${system};
 
 in stdenv.mkDerivation {
