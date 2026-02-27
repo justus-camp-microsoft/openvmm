@@ -47,6 +47,11 @@ flowey_request! {
 
         /// Ensure that Rust was installed and is available on the $PATH
         EnsureInstalled(WriteVar<SideEffect>),
+
+        /// Skip installation entirely (e.g., when Nix provides Rust).
+        /// When true, `EnsureInstalled` resolves immediately and
+        /// `GetRustupToolchain` returns `None`.
+        SkipInstall(bool),
     }
 }
 
@@ -62,6 +67,7 @@ impl FlowNode for Node {
         let mut rust_toolchain = None;
         let mut auto_install = None;
         let mut ignore_version = None;
+        let mut skip_install = None;
         let mut additional_target_triples = BTreeSet::new();
         let mut additional_components = BTreeSet::new();
         let mut get_rust_toolchain = Vec::new();
@@ -76,6 +82,9 @@ impl FlowNode for Node {
                 Request::IgnoreVersion(v) => {
                     same_across_all_reqs("IgnoreVersion", &mut ignore_version, v)?
                 }
+                Request::SkipInstall(v) => {
+                    same_across_all_reqs("SkipInstall", &mut skip_install, v)?
+                }
                 Request::Version(v) => same_across_all_reqs("Version", &mut rust_toolchain, v)?,
                 Request::InstallTargetTriple(s) => {
                     additional_target_triples.insert(s.to_string());
@@ -86,6 +95,39 @@ impl FlowNode for Node {
                 Request::GetRustupToolchain(v) => get_rust_toolchain.push(v),
                 Request::GetCargoHome(v) => get_cargo_home.push(v),
             }
+        }
+
+        let skip_install = skip_install.unwrap_or(false);
+
+        // When skipping installation (e.g., Nix provides Rust), resolve all
+        // dependencies at emit-time without emitting heavyweight install steps.
+        if skip_install {
+            if !ensure_installed.is_empty() {
+                ctx.emit_side_effect_step([], ensure_installed);
+            }
+
+            if !get_rust_toolchain.is_empty() {
+                ctx.emit_rust_step("report rustup toolchain (skip: Nix)", |ctx| {
+                    let get_rust_toolchain = get_rust_toolchain.claim(ctx);
+                    move |rt| {
+                        rt.write_all(get_rust_toolchain, &None);
+                        Ok(())
+                    }
+                });
+            }
+
+            if !get_cargo_home.is_empty() {
+                ctx.emit_rust_step("report $CARGO_HOME", |ctx| {
+                    let get_cargo_home = get_cargo_home.claim(ctx);
+                    move |rt| {
+                        let cargo_home = home::cargo_home()?;
+                        rt.write_all(get_cargo_home, &cargo_home);
+                        Ok(())
+                    }
+                });
+            }
+
+            return Ok(());
         }
 
         let ensure_installed = ensure_installed;
@@ -222,6 +264,7 @@ impl FlowNode for Node {
                             if let Some(write_cargo_bin) = write_cargo_bin {
                                 rt.write(write_cargo_bin, &Some(crate::check_needs_relaunch::BinOrEnv::Bin("cargo".to_string())));
                             }
+
                             let rust_toolchain = rust_toolchain.clone();
                             if check_rust_install.clone()(rt).is_ok() {
                                 return Ok(());
@@ -334,13 +377,7 @@ impl FlowNode for Node {
                     let rust_toolchain = match rust_toolchain {
                         Some(toolchain) => Some(toolchain),
                         None => {
-                            if matches!(
-                                rt.platform(),
-                                FlowPlatform::Linux(FlowPlatformLinuxDistro::Nix)
-                            ) {
-                                // Nix will provide the right cargo version, no need to use rustup
-                                None
-                            } else if let Ok(rustup) = which::which("rustup") {
+                            if let Ok(rustup) = which::which("rustup") {
                                 // Unfortunately, `rustup` still doesn't have any stable way to emit
                                 // machine-readable output. See https://github.com/rust-lang/rustup/issues/450
                                 //
