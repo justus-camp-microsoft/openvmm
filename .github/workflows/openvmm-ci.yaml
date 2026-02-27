@@ -158,14 +158,18 @@ jobs:
         flowey.exe e 0 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 0 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 0 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
         flowey.exe e 0 flowey_lib_hvlite::init_cross_build 0
+        flowey.exe e 0 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 0 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
         flowey.exe e 0 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 0 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 0 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 0 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: run xtask fmt
@@ -320,19 +324,23 @@ jobs:
         flowey e 1 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 1 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 1 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
         flowey e 1 flowey_lib_hvlite::init_cross_build 0
+        flowey e 1 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 1 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
         flowey e 1 flowey_lib_common::run_cargo_build 0
-        flowey e 1 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 1 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 1 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 1 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 1 flowey_lib_hvlite::run_cargo_build 3
         flowey e 1 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: run xtask fmt
@@ -484,15 +492,21 @@ jobs:
         flowey.exe e 10 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 10 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
+      run: flowey.exe e 10 flowey_lib_hvlite::init_cross_build 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 10 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey.exe e 10 flowey_lib_hvlite::init_cross_build 0
         flowey.exe e 10 flowey_lib_hvlite::init_cross_build 2
+        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey.exe e 10 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 10 flowey_lib_common::run_cargo_build 1
+        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 10 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: determine clippy exclusions
@@ -532,19 +546,25 @@ jobs:
       run: flowey.exe e 10 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
+      run: flowey.exe e 10 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 10 flowey_lib_common::install_cargo_nextest 0
         flowey.exe e 10 flowey_lib_hvlite::init_cross_build 3
+        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey.exe e 10 flowey_lib_common::run_cargo_build 1
-        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 1
+        flowey.exe e 10 flowey_lib_common::run_cargo_build 0
+        flowey.exe e 10 flowey_lib_hvlite::run_cargo_build 5
         flowey.exe e 10 flowey_lib_hvlite::build_xtask 1
       shell: bash
     - name: determine unit test exclusions
+      run: flowey.exe e 10 flowey_lib_hvlite::build_nextest_unit_tests 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 10 flowey_lib_hvlite::build_nextest_unit_tests 0
         flowey.exe e 10 flowey_lib_hvlite::init_cross_build 1
         flowey.exe e 10 flowey_lib_hvlite::run_cargo_nextest_run 0
       shell: bash
@@ -730,9 +750,39 @@ jobs:
         flowey e 11 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 11 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 11 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+        flowey e 11 flowey_lib_hvlite::init_cross_build 2
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 5
+      shell: bash
+    - name: cargo build xtask
+      run: |-
+        flowey e 11 flowey_lib_common::run_cargo_build 0
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 6
+      shell: bash
+    - name: split debug symbols
+      run: |-
+        flowey e 11 flowey_lib_hvlite::run_split_debug_info 0
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 7
+        flowey e 11 flowey_lib_hvlite::build_xtask 1
+      shell: bash
+    - name: determine clippy exclusions
+      run: flowey e 11 flowey_lib_hvlite::_jobs::check_clippy 1
+      shell: bash
+    - name: inject cross env
+      run: flowey e 11 flowey_lib_hvlite::init_cross_build 0
+      shell: bash
+    - name: cargo clippy
+      run: flowey e 11 flowey_lib_common::run_cargo_clippy 0
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 11 flowey_lib_hvlite::init_cross_build 4
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
@@ -741,29 +791,8 @@ jobs:
       shell: bash
     - name: split debug symbols
       run: |-
-        flowey e 11 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 11 flowey_lib_hvlite::run_cargo_build 3
-        flowey e 11 flowey_lib_hvlite::build_xtask 1
-      shell: bash
-    - name: determine clippy exclusions
-      run: |-
-        flowey e 11 flowey_lib_hvlite::_jobs::check_clippy 1
-        flowey e 11 flowey_lib_hvlite::init_cross_build 0
-      shell: bash
-    - name: cargo clippy
-      run: |-
-        flowey e 11 flowey_lib_common::run_cargo_clippy 0
-        flowey e 11 flowey_lib_hvlite::init_cross_build 3
-      shell: bash
-    - name: cargo build xtask
-      run: |-
-        flowey e 11 flowey_lib_common::run_cargo_build 1
-        flowey e 11 flowey_lib_hvlite::run_cargo_build 0
-      shell: bash
-    - name: split debug symbols
-      run: |-
         flowey e 11 flowey_lib_hvlite::run_split_debug_info 2
-        flowey e 11 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 3
         flowey e 11 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: determine clippy exclusions
@@ -803,24 +832,30 @@ jobs:
       run: flowey e 11 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
+      run: flowey e 11 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 11 flowey_lib_common::install_cargo_nextest 0
-        flowey e 11 flowey_lib_hvlite::init_cross_build 2
+        flowey e 11 flowey_lib_hvlite::init_cross_build 3
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 8
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 9
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 11 flowey_lib_common::run_cargo_build 0
-        flowey e 11 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 11 flowey_lib_common::run_cargo_build 1
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 10
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 11 flowey_lib_hvlite::run_split_debug_info 1
-        flowey e 11 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 11 flowey_lib_hvlite::run_cargo_build 11
         flowey e 11 flowey_lib_hvlite::build_xtask 2
       shell: bash
     - name: determine unit test exclusions
+      run: flowey e 11 flowey_lib_hvlite::build_nextest_unit_tests 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 11 flowey_lib_hvlite::build_nextest_unit_tests 0
         flowey e 11 flowey_lib_hvlite::init_cross_build 1
         flowey e 11 flowey_lib_hvlite::run_cargo_nextest_run 0
       shell: bash
@@ -1011,20 +1046,26 @@ jobs:
       run: flowey e 12 flowey_lib_common::resolve_protoc 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 12 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
+      run: flowey e 12 flowey_lib_hvlite::init_cross_build 2
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 12 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey e 12 flowey_lib_hvlite::init_cross_build 2
-        flowey e 12 flowey_lib_hvlite::init_cross_build 0
+        flowey e 12 flowey_lib_hvlite::init_cross_build 1
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 12 flowey_lib_common::run_cargo_build 0
-        flowey e 12 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 12 flowey_lib_common::run_cargo_build 1
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 12 flowey_lib_hvlite::run_split_debug_info 1
-        flowey e 12 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 3
         flowey e 12 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: determine clippy exclusions
@@ -1070,24 +1111,30 @@ jobs:
       run: flowey e 12 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
+      run: flowey e 12 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 12 flowey_lib_common::install_cargo_nextest 0
-        flowey e 12 flowey_lib_hvlite::init_cross_build 1
+        flowey e 12 flowey_lib_hvlite::init_cross_build 0
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 5
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 12 flowey_lib_common::run_cargo_build 1
-        flowey e 12 flowey_lib_hvlite::run_cargo_build 2
+        flowey e 12 flowey_lib_common::run_cargo_build 0
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 6
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 12 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 12 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 12 flowey_lib_hvlite::run_cargo_build 7
         flowey e 12 flowey_lib_hvlite::build_xtask 1
       shell: bash
     - name: determine unit test exclusions
+      run: flowey e 12 flowey_lib_hvlite::build_nextest_unit_tests 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 12 flowey_lib_hvlite::build_nextest_unit_tests 0
         flowey e 12 flowey_lib_hvlite::init_cross_build 3
         flowey e 12 flowey_lib_hvlite::run_cargo_nextest_run 0
       shell: bash
@@ -1267,15 +1314,21 @@ jobs:
         flowey.exe e 13 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 13 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
+      run: flowey.exe e 13 flowey_lib_hvlite::init_cross_build 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 13 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey.exe e 13 flowey_lib_hvlite::init_cross_build 0
         flowey.exe e 13 flowey_lib_hvlite::init_cross_build 2
+        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey.exe e 13 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 13 flowey_lib_common::run_cargo_build 1
+        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 13 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: determine clippy exclusions
@@ -1315,19 +1368,25 @@ jobs:
       run: flowey.exe e 13 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
+      run: flowey.exe e 13 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 13 flowey_lib_common::install_cargo_nextest 0
         flowey.exe e 13 flowey_lib_hvlite::init_cross_build 3
+        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey.exe e 13 flowey_lib_common::run_cargo_build 1
-        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 1
+        flowey.exe e 13 flowey_lib_common::run_cargo_build 0
+        flowey.exe e 13 flowey_lib_hvlite::run_cargo_build 5
         flowey.exe e 13 flowey_lib_hvlite::build_xtask 1
       shell: bash
     - name: determine unit test exclusions
+      run: flowey.exe e 13 flowey_lib_hvlite::build_nextest_unit_tests 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 13 flowey_lib_hvlite::build_nextest_unit_tests 0
         flowey.exe e 13 flowey_lib_hvlite::init_cross_build 1
         flowey.exe e 13 flowey_lib_hvlite::run_cargo_nextest_run 0
       shell: bash
@@ -1513,20 +1572,26 @@ jobs:
         flowey e 14 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 14 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
+      run: flowey e 14 flowey_lib_hvlite::init_cross_build 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 14 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey e 14 flowey_lib_hvlite::init_cross_build 0
-        flowey e 14 flowey_lib_hvlite::init_cross_build 2
+        flowey e 14 flowey_lib_hvlite::init_cross_build 3
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 14 flowey_lib_common::run_cargo_build 0
-        flowey e 14 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 14 flowey_lib_common::run_cargo_build 1
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 14 flowey_lib_hvlite::run_split_debug_info 1
-        flowey e 14 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 3
         flowey e 14 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: determine clippy exclusions
@@ -1566,24 +1631,30 @@ jobs:
       run: flowey e 14 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
+      run: flowey e 14 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 14 flowey_lib_common::install_cargo_nextest 0
-        flowey e 14 flowey_lib_hvlite::init_cross_build 3
+        flowey e 14 flowey_lib_hvlite::init_cross_build 2
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 5
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 14 flowey_lib_common::run_cargo_build 1
-        flowey e 14 flowey_lib_hvlite::run_cargo_build 2
+        flowey e 14 flowey_lib_common::run_cargo_build 0
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 6
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 14 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 14 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 14 flowey_lib_hvlite::run_cargo_build 7
         flowey e 14 flowey_lib_hvlite::build_xtask 1
       shell: bash
     - name: determine unit test exclusions
+      run: flowey e 14 flowey_lib_hvlite::build_nextest_unit_tests 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 14 flowey_lib_hvlite::build_nextest_unit_tests 0
         flowey e 14 flowey_lib_hvlite::init_cross_build 1
         flowey e 14 flowey_lib_hvlite::run_cargo_nextest_run 0
       shell: bash
@@ -1774,20 +1845,26 @@ jobs:
       run: flowey e 15 flowey_lib_common::resolve_protoc 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 15 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
+      run: flowey e 15 flowey_lib_hvlite::init_cross_build 2
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 15 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey e 15 flowey_lib_hvlite::init_cross_build 2
-        flowey e 15 flowey_lib_hvlite::init_cross_build 0
+        flowey e 15 flowey_lib_hvlite::init_cross_build 1
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 15 flowey_lib_common::run_cargo_build 0
-        flowey e 15 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 15 flowey_lib_common::run_cargo_build 1
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 15 flowey_lib_hvlite::run_split_debug_info 1
-        flowey e 15 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 3
         flowey e 15 flowey_lib_hvlite::build_xtask 0
       shell: bash
     - name: determine clippy exclusions
@@ -1833,24 +1910,30 @@ jobs:
       run: flowey e 15 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
+      run: flowey e 15 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 15 flowey_lib_common::install_cargo_nextest 0
-        flowey e 15 flowey_lib_hvlite::init_cross_build 1
+        flowey e 15 flowey_lib_hvlite::init_cross_build 0
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 5
       shell: bash
     - name: cargo build xtask
       run: |-
-        flowey e 15 flowey_lib_common::run_cargo_build 1
-        flowey e 15 flowey_lib_hvlite::run_cargo_build 2
+        flowey e 15 flowey_lib_common::run_cargo_build 0
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 6
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 15 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 15 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 15 flowey_lib_hvlite::run_cargo_build 7
         flowey e 15 flowey_lib_hvlite::build_xtask 1
       shell: bash
     - name: determine unit test exclusions
+      run: flowey e 15 flowey_lib_hvlite::build_nextest_unit_tests 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 15 flowey_lib_hvlite::build_nextest_unit_tests 0
         flowey e 15 flowey_lib_hvlite::init_cross_build 3
         flowey e 15 flowey_lib_hvlite::run_cargo_nextest_run 0
       shell: bash
@@ -3104,39 +3187,58 @@ jobs:
         flowey.exe e 2 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 2 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 2 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 1
+        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 2
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build hypestv
       run: |-
         flowey.exe e 2 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 2 flowey_lib_hvlite::build_hypestv 0
         flowey.exe e 2 flowey_core::pipeline::artifact::publish 0
-        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 0
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 1
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 9
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 10
       shell: bash
     - name: cargo build vmgs_lib
       run: |-
         flowey.exe e 2 flowey_lib_common::run_cargo_build 3
-        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 11
         flowey.exe e 2 flowey_lib_hvlite::build_and_test_vmgs_lib 0
         flowey.exe e 2 flowey_lib_hvlite::build_and_test_vmgs_lib 1
         flowey.exe e 2 flowey_core::pipeline::artifact::publish 1
-        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 2
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 3
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build igvmfilegen
       run: |-
         flowey.exe e 2 flowey_lib_common::run_cargo_build 1
-        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 1
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 5
         flowey.exe e 2 flowey_lib_hvlite::build_igvmfilegen 0
         flowey.exe e 2 flowey_core::pipeline::artifact::publish 2
-        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 3
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 2 flowey_lib_hvlite::init_cross_build 0
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 6
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 7
       shell: bash
     - name: cargo build ohcldiag-dev
       run: |-
         flowey.exe e 2 flowey_lib_common::run_cargo_build 2
-        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 2
+        flowey.exe e 2 flowey_lib_hvlite::run_cargo_build 8
         flowey.exe e 2 flowey_lib_hvlite::build_ohcldiag_dev 0
         flowey.exe e 2 flowey_core::pipeline::artifact::publish 3
       shell: bash
@@ -4127,42 +4229,61 @@ jobs:
         flowey.exe e 3 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 3 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 3 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 7
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 1
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 6
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 7
       shell: bash
     - name: cargo build prep_steps
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 2
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 2
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 8
         flowey.exe e 3 flowey_lib_hvlite::build_prep_steps 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 5
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 4
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 6
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 22
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 23
       shell: bash
     - name: cargo build vmgstool
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 6
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 10
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 24
         flowey.exe e 3 flowey_lib_hvlite::build_vmgstool 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 6
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 3
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 7
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 8
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 5
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 17
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 18
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 19
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 20
       shell: bash
     - name: cargo build tpm_guest_tests
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 5
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 9
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 21
         flowey.exe e 3 flowey_lib_hvlite::build_tpm_guest_tests 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 7
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 1
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 3
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 4
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 2
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 9
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 10
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 11
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 12
       shell: bash
     - name: cargo build test_igvm_agent_rpc_server
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 3
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 5
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 13
         flowey.exe e 3 flowey_lib_hvlite::build_test_igvm_agent_rpc_server 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 0
       shell: bash
@@ -4197,37 +4318,53 @@ jobs:
       run: flowey.exe e 3 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
-      run: |-
-        flowey.exe e 3 flowey_lib_common::install_cargo_nextest 0
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 0
+      run: flowey.exe e 3 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
+      run: flowey.exe e 3 flowey_lib_hvlite::init_cross_build 0
       shell: bash
     - name: build + archive 'vmm_tests' nextests
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_nextest_archive 0
         flowey.exe e 3 flowey_lib_hvlite::build_nextest_vmm_tests 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 1
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 5
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 3
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build openvmm
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 3 flowey_lib_hvlite::build_openvmm 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 2
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 6
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 7
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build pipette
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 1
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 1
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 5
         flowey.exe e 3 flowey_lib_hvlite::build_pipette 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 3
-        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 2
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 3 flowey_lib_hvlite::init_cross_build 4
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 14
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 15
       shell: bash
     - name: cargo build tmk_vmm
       run: |-
         flowey.exe e 3 flowey_lib_common::run_cargo_build 4
-        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 6
+        flowey.exe e 3 flowey_lib_hvlite::run_cargo_build 16
         flowey.exe e 3 flowey_lib_hvlite::build_tmk_vmm 0
         flowey.exe e 3 flowey_core::pipeline::artifact::publish 4
       shell: bash
@@ -4436,22 +4573,31 @@ jobs:
         flowey.exe e 4 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 4 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 4 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 1
+        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 2
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build hypestv
       run: |-
         flowey.exe e 4 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 4 flowey_lib_hvlite::build_hypestv 0
         flowey.exe e 4 flowey_core::pipeline::artifact::publish 0
-        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 0
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 1
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 9
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 10
       shell: bash
     - name: cargo build vmgs_lib
       run: |-
         flowey.exe e 4 flowey_lib_common::run_cargo_build 3
-        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 11
         flowey.exe e 4 flowey_lib_hvlite::build_and_test_vmgs_lib 0
       shell: bash
     - name: test vmgs_lib
@@ -4459,20 +4605,30 @@ jobs:
         flowey.exe e 4 flowey_lib_hvlite::build_and_test_vmgs_lib 1
         flowey.exe e 4 flowey_lib_hvlite::build_and_test_vmgs_lib 2
         flowey.exe e 4 flowey_core::pipeline::artifact::publish 1
-        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 2
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 3
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build igvmfilegen
       run: |-
         flowey.exe e 4 flowey_lib_common::run_cargo_build 1
-        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 1
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 5
         flowey.exe e 4 flowey_lib_hvlite::build_igvmfilegen 0
         flowey.exe e 4 flowey_core::pipeline::artifact::publish 2
-        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 3
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 4 flowey_lib_hvlite::init_cross_build 0
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 6
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 7
       shell: bash
     - name: cargo build ohcldiag-dev
       run: |-
         flowey.exe e 4 flowey_lib_common::run_cargo_build 2
-        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 2
+        flowey.exe e 4 flowey_lib_hvlite::run_cargo_build 8
         flowey.exe e 4 flowey_lib_hvlite::build_ohcldiag_dev 0
         flowey.exe e 4 flowey_core::pipeline::artifact::publish 3
       shell: bash
@@ -4662,66 +4818,100 @@ jobs:
         flowey.exe e 5 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey.exe e 5 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey.exe e 5 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 5
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 3
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build openvmm
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 0
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 0
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 2
         flowey.exe e 5 flowey_lib_hvlite::build_openvmm 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 0
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 6
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 7
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 3
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build pipette
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 1
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 1
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 5
         flowey.exe e 5 flowey_lib_hvlite::build_pipette 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 1
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 2
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 4
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 14
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 15
       shell: bash
     - name: cargo build tmk_vmm
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 4
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 6
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 16
         flowey.exe e 5 flowey_lib_hvlite::build_tmk_vmm 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 2
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 7
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 1
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 6
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 7
       shell: bash
     - name: cargo build prep_steps
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 2
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 2
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 8
         flowey.exe e 5 flowey_lib_hvlite::build_prep_steps 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 3
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 4
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 6
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 22
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 23
       shell: bash
     - name: cargo build vmgstool
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 6
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 10
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 24
         flowey.exe e 5 flowey_lib_hvlite::build_vmgstool 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 4
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 3
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 7
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 8
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 5
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 17
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 18
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 19
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 20
       shell: bash
     - name: cargo build tpm_guest_tests
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 5
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 9
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 21
         flowey.exe e 5 flowey_lib_hvlite::build_tpm_guest_tests 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 5
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 1
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 3
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 4
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 2
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 9
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 10
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 11
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 12
       shell: bash
     - name: cargo build test_igvm_agent_rpc_server
       run: |-
         flowey.exe e 5 flowey_lib_common::run_cargo_build 3
-        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 5
+        flowey.exe e 5 flowey_lib_hvlite::run_cargo_build 13
         flowey.exe e 5 flowey_lib_hvlite::build_test_igvm_agent_rpc_server 0
         flowey.exe e 5 flowey_core::pipeline::artifact::publish 6
       shell: bash
@@ -4756,9 +4946,10 @@ jobs:
       run: flowey.exe e 5 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
-      run: |-
-        flowey.exe e 5 flowey_lib_common::install_cargo_nextest 0
-        flowey.exe e 5 flowey_lib_hvlite::init_cross_build 0
+      run: flowey.exe e 5 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
+      run: flowey.exe e 5 flowey_lib_hvlite::init_cross_build 0
       shell: bash
     - name: build + archive 'vmm_tests' nextests
       run: |-
@@ -4993,106 +5184,145 @@ jobs:
         flowey e 6 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 6 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 6 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
         flowey e 6 flowey_lib_hvlite::init_cross_build 2
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 11
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 12
       shell: bash
     - name: cargo build openvmm
       run: |-
         flowey e 6 flowey_lib_common::run_cargo_build 3
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 13
       shell: bash
     - name: split debug symbols
       run: |-
-        flowey e 6 flowey_lib_hvlite::run_split_debug_info 1
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 6 flowey_lib_hvlite::run_split_debug_info 2
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 14
         flowey e 6 flowey_lib_hvlite::build_openvmm 0
         flowey e 6 flowey_core::pipeline::artifact::publish 0
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 6 flowey_lib_hvlite::init_cross_build 5
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 28
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 29
       shell: bash
     - name: cargo build vmgstool
       run: |-
         flowey e 6 flowey_lib_common::run_cargo_build 7
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 14
-      shell: bash
-    - name: split debug symbols
-      run: |-
-        flowey e 6 flowey_lib_hvlite::run_split_debug_info 4
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 15
-        flowey e 6 flowey_lib_hvlite::build_vmgstool 0
-        flowey e 6 flowey_core::pipeline::artifact::publish 1
-        flowey e 6 flowey_lib_hvlite::init_cross_build 4
-      shell: bash
-    - name: cargo build vmgs_lib
-      run: |-
-        flowey e 6 flowey_lib_common::run_cargo_build 6
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 13
-        flowey e 6 flowey_lib_hvlite::build_and_test_vmgs_lib 0
-        flowey e 6 flowey_lib_hvlite::build_and_test_vmgs_lib 1
-        flowey e 6 flowey_core::pipeline::artifact::publish 2
-        flowey e 6 flowey_lib_hvlite::init_cross_build 6
-      shell: bash
-    - name: cargo build igvmfilegen
-      run: |-
-        flowey e 6 flowey_lib_common::run_cargo_build 1
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 30
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 6 flowey_lib_hvlite::run_split_debug_info 5
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 2
-        flowey e 6 flowey_lib_hvlite::build_igvmfilegen 0
-        flowey e 6 flowey_core::pipeline::artifact::publish 3
-        flowey e 6 flowey_lib_hvlite::init_cross_build 1
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 31
+        flowey e 6 flowey_lib_hvlite::build_vmgstool 0
+        flowey e 6 flowey_core::pipeline::artifact::publish 1
       shell: bash
-    - name: cargo build ohcldiag-dev
+    - name: inject cross env
       run: |-
-        flowey e 6 flowey_lib_common::run_cargo_build 2
+        flowey e 6 flowey_lib_hvlite::init_cross_build 4
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 25
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 26
+      shell: bash
+    - name: cargo build vmgs_lib
+      run: |-
+        flowey e 6 flowey_lib_common::run_cargo_build 6
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 27
+        flowey e 6 flowey_lib_hvlite::build_and_test_vmgs_lib 0
+        flowey e 6 flowey_lib_hvlite::build_and_test_vmgs_lib 1
+        flowey e 6 flowey_core::pipeline::artifact::publish 2
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey e 6 flowey_lib_hvlite::init_cross_build 6
         flowey e 6 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 4
+      shell: bash
+    - name: cargo build igvmfilegen
+      run: |-
+        flowey e 6 flowey_lib_common::run_cargo_build 1
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 5
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 6 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 6 flowey_lib_hvlite::build_igvmfilegen 0
+        flowey e 6 flowey_core::pipeline::artifact::publish 3
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey e 6 flowey_lib_hvlite::init_cross_build 1
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 7
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 8
+      shell: bash
+    - name: cargo build ohcldiag-dev
+      run: |-
+        flowey e 6 flowey_lib_common::run_cargo_build 2
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 9
+      shell: bash
+    - name: split debug symbols
+      run: |-
+        flowey e 6 flowey_lib_hvlite::run_split_debug_info 1
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 10
         flowey e 6 flowey_lib_hvlite::build_ohcldiag_dev 0
         flowey e 6 flowey_core::pipeline::artifact::publish 4
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 6 flowey_lib_hvlite::init_cross_build 7
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build guest_test_uefi
       run: |-
         flowey e 6 flowey_lib_common::run_cargo_build 0
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: build guest_test_uefi.img
       run: |-
         flowey e 6 flowey_lib_hvlite::build_guest_test_uefi 0
         flowey e 6 flowey_core::pipeline::artifact::publish 5
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 6 flowey_lib_hvlite::init_cross_build 0
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 7
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 8
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 15
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 16
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 17
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 18
       shell: bash
     - name: cargo build simple_tmk
       run: |-
         flowey e 6 flowey_lib_common::run_cargo_build 4
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 9
-      shell: bash
-    - name: split debug symbols
-      run: |-
-        flowey e 6 flowey_lib_hvlite::run_split_debug_info 2
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 10
-        flowey e 6 flowey_lib_hvlite::build_tmks 0
-        flowey e 6 flowey_core::pipeline::artifact::publish 6
-        flowey e 6 flowey_lib_hvlite::init_cross_build 3
-      shell: bash
-    - name: cargo build tpm_guest_tests
-      run: |-
-        flowey e 6 flowey_lib_common::run_cargo_build 5
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 11
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 19
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 6 flowey_lib_hvlite::run_split_debug_info 3
-        flowey e 6 flowey_lib_hvlite::run_cargo_build 12
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 20
+        flowey e 6 flowey_lib_hvlite::build_tmks 0
+        flowey e 6 flowey_core::pipeline::artifact::publish 6
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey e 6 flowey_lib_hvlite::init_cross_build 3
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 21
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 22
+      shell: bash
+    - name: cargo build tpm_guest_tests
+      run: |-
+        flowey e 6 flowey_lib_common::run_cargo_build 5
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 23
+      shell: bash
+    - name: split debug symbols
+      run: |-
+        flowey e 6 flowey_lib_hvlite::run_split_debug_info 4
+        flowey e 6 flowey_lib_hvlite::run_cargo_build 24
         flowey e 6 flowey_lib_hvlite::build_tpm_guest_tests 0
         flowey e 6 flowey_core::pipeline::artifact::publish 7
       shell: bash
@@ -5314,40 +5544,54 @@ jobs:
         flowey e 7 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 7 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 7 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
         flowey e 7 flowey_lib_hvlite::init_cross_build 3
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 11
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 12
       shell: bash
     - name: cargo build openvmm
       run: |-
         flowey e 7 flowey_lib_common::run_cargo_build 3
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 13
       shell: bash
     - name: split debug symbols
       run: |-
-        flowey e 7 flowey_lib_hvlite::run_split_debug_info 1
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 7 flowey_lib_hvlite::run_split_debug_info 2
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 14
         flowey e 7 flowey_lib_hvlite::build_openvmm 0
         flowey e 7 flowey_core::pipeline::artifact::publish 0
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 7 flowey_lib_hvlite::init_cross_build 6
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 28
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 29
       shell: bash
     - name: cargo build vmgstool
       run: |-
         flowey e 7 flowey_lib_common::run_cargo_build 7
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 14
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 30
       shell: bash
     - name: split debug symbols
       run: |-
-        flowey e 7 flowey_lib_hvlite::run_split_debug_info 4
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 15
+        flowey e 7 flowey_lib_hvlite::run_split_debug_info 5
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 31
         flowey e 7 flowey_lib_hvlite::build_vmgstool 0
         flowey e 7 flowey_core::pipeline::artifact::publish 1
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 7 flowey_lib_hvlite::init_cross_build 5
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 25
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 26
       shell: bash
     - name: cargo build vmgs_lib
       run: |-
         flowey e 7 flowey_lib_common::run_cargo_build 6
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 13
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 27
         flowey e 7 flowey_lib_hvlite::build_and_test_vmgs_lib 0
       shell: bash
     - name: test vmgs_lib
@@ -5355,69 +5599,94 @@ jobs:
         flowey e 7 flowey_lib_hvlite::build_and_test_vmgs_lib 1
         flowey e 7 flowey_lib_hvlite::build_and_test_vmgs_lib 2
         flowey e 7 flowey_core::pipeline::artifact::publish 2
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 7 flowey_lib_hvlite::init_cross_build 7
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 4
       shell: bash
     - name: cargo build igvmfilegen
       run: |-
         flowey e 7 flowey_lib_common::run_cargo_build 1
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 1
-      shell: bash
-    - name: split debug symbols
-      run: |-
-        flowey e 7 flowey_lib_hvlite::run_split_debug_info 5
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 2
-        flowey e 7 flowey_lib_hvlite::build_igvmfilegen 0
-        flowey e 7 flowey_core::pipeline::artifact::publish 3
-        flowey e 7 flowey_lib_hvlite::init_cross_build 2
-      shell: bash
-    - name: cargo build ohcldiag-dev
-      run: |-
-        flowey e 7 flowey_lib_common::run_cargo_build 2
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 5
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 7 flowey_lib_hvlite::run_split_debug_info 0
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 7 flowey_lib_hvlite::build_igvmfilegen 0
+        flowey e 7 flowey_core::pipeline::artifact::publish 3
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey e 7 flowey_lib_hvlite::init_cross_build 2
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 7
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 8
+      shell: bash
+    - name: cargo build ohcldiag-dev
+      run: |-
+        flowey e 7 flowey_lib_common::run_cargo_build 2
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 9
+      shell: bash
+    - name: split debug symbols
+      run: |-
+        flowey e 7 flowey_lib_hvlite::run_split_debug_info 1
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 10
         flowey e 7 flowey_lib_hvlite::build_ohcldiag_dev 0
         flowey e 7 flowey_core::pipeline::artifact::publish 4
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 7 flowey_lib_hvlite::init_cross_build 8
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build guest_test_uefi
       run: |-
         flowey e 7 flowey_lib_common::run_cargo_build 0
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: build guest_test_uefi.img
       run: |-
         flowey e 7 flowey_lib_hvlite::build_guest_test_uefi 0
         flowey e 7 flowey_core::pipeline::artifact::publish 5
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 7 flowey_lib_hvlite::init_cross_build 0
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 7
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 8
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 15
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 16
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 17
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 18
       shell: bash
     - name: cargo build simple_tmk
       run: |-
         flowey e 7 flowey_lib_common::run_cargo_build 4
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 9
-      shell: bash
-    - name: split debug symbols
-      run: |-
-        flowey e 7 flowey_lib_hvlite::run_split_debug_info 2
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 10
-        flowey e 7 flowey_lib_hvlite::build_tmks 0
-        flowey e 7 flowey_core::pipeline::artifact::publish 6
-        flowey e 7 flowey_lib_hvlite::init_cross_build 4
-      shell: bash
-    - name: cargo build tpm_guest_tests
-      run: |-
-        flowey e 7 flowey_lib_common::run_cargo_build 5
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 11
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 19
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 7 flowey_lib_hvlite::run_split_debug_info 3
-        flowey e 7 flowey_lib_hvlite::run_cargo_build 12
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 20
+        flowey e 7 flowey_lib_hvlite::build_tmks 0
+        flowey e 7 flowey_core::pipeline::artifact::publish 6
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey e 7 flowey_lib_hvlite::init_cross_build 4
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 21
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 22
+      shell: bash
+    - name: cargo build tpm_guest_tests
+      run: |-
+        flowey e 7 flowey_lib_common::run_cargo_build 5
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 23
+      shell: bash
+    - name: split debug symbols
+      run: |-
+        flowey e 7 flowey_lib_hvlite::run_split_debug_info 4
+        flowey e 7 flowey_lib_hvlite::run_cargo_build 24
         flowey e 7 flowey_lib_hvlite::build_tpm_guest_tests 0
         flowey e 7 flowey_core::pipeline::artifact::publish 7
       shell: bash
@@ -5452,9 +5721,10 @@ jobs:
       run: flowey e 7 flowey_lib_common::install_rust 3
       shell: bash
     - name: installing cargo-nextest
-      run: |-
-        flowey e 7 flowey_lib_common::install_cargo_nextest 0
-        flowey e 7 flowey_lib_hvlite::init_cross_build 1
+      run: flowey e 7 flowey_lib_common::install_cargo_nextest 0
+      shell: bash
+    - name: inject cross env
+      run: flowey e 7 flowey_lib_hvlite::init_cross_build 1
       shell: bash
     - name: build + archive 'vmm_tests' nextests
       run: |-
@@ -5684,21 +5954,25 @@ jobs:
         flowey e 8 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 8 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 8 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
         flowey e 8 flowey_lib_hvlite::init_cross_build 0
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 2
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 3
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 7
       shell: bash
     - name: cargo build openhcl_boot
       run: |-
         flowey e 8 flowey_lib_common::run_cargo_build 1
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 8
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 8 flowey_lib_hvlite::run_split_debug_info 2
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 9
         flowey e 8 flowey_lib_hvlite::build_openhcl_boot 0
       shell: bash
     - name: extract and resolve kernel package
@@ -5710,14 +5984,18 @@ jobs:
       run: flowey e 8 flowey_lib_hvlite::resolve_openvmm_deps 0
       shell: bash
     - name: extract Aarch64 sysroot.tar.gz
+      run: flowey e 8 flowey_lib_hvlite::init_openvmm_magicpath_openhcl_sysroot 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 8 flowey_lib_hvlite::init_openvmm_magicpath_openhcl_sysroot 0
         flowey e 8 flowey_lib_hvlite::init_cross_build 2
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 14
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 15
       shell: bash
     - name: cargo build openvmm_hcl
       run: |-
         flowey e 8 flowey_lib_common::run_cargo_build 3
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 8
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 16
         flowey e 8 flowey_lib_hvlite::build_openvmm_hcl 1
         flowey e 8 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 13
       shell: bash
@@ -5732,17 +6010,22 @@ jobs:
       run: |-
         flowey e 8 flowey_lib_hvlite::build_openhcl_initrd 1
         flowey e 8 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 19
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 8 flowey_lib_hvlite::init_cross_build 5
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build igvmfilegen
       run: |-
         flowey e 8 flowey_lib_common::run_cargo_build 0
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 8 flowey_lib_hvlite::run_split_debug_info 6
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 3
         flowey e 8 flowey_lib_hvlite::build_igvmfilegen 0
         flowey e 8 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 20
         flowey e 8 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 21
@@ -5792,48 +6075,61 @@ jobs:
         flowey e 8 flowey_lib_hvlite::artifact_openhcl_igvm_from_recipe_extras::publish 0
       shell: bash
     - name: copying OpenHCL igvm extras to artifact dir
+      run: flowey e 8 flowey_lib_common::copy_to_artifact_dir 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 8 flowey_lib_common::copy_to_artifact_dir 0
         flowey e 8 flowey_lib_hvlite::init_cross_build 1
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 10
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 11
       shell: bash
     - name: cargo build openvmm_hcl
       run: |-
         flowey e 8 flowey_lib_common::run_cargo_build 2
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 12
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 8 flowey_lib_hvlite::run_split_debug_info 3
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 7
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 13
         flowey e 8 flowey_lib_hvlite::build_openvmm_hcl 0
       shell: bash
     - name: copying openhcl build to publish dir
+      run: flowey e 8 flowey_lib_hvlite::artifact_openvmm_hcl_sizecheck::publish 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 8 flowey_lib_hvlite::artifact_openvmm_hcl_sizecheck::publish 0
         flowey e 8 flowey_lib_hvlite::init_cross_build 3
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 17
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 18
       shell: bash
     - name: cargo build pipette
       run: |-
         flowey e 8 flowey_lib_common::run_cargo_build 4
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 9
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 19
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 8 flowey_lib_hvlite::run_split_debug_info 4
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 10
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 20
         flowey e 8 flowey_lib_hvlite::build_pipette 0
         flowey e 8 flowey_core::pipeline::artifact::publish 0
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 8 flowey_lib_hvlite::init_cross_build 4
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 21
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 22
       shell: bash
     - name: cargo build tmk_vmm
       run: |-
         flowey e 8 flowey_lib_common::run_cargo_build 5
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 11
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 23
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 8 flowey_lib_hvlite::run_split_debug_info 5
-        flowey e 8 flowey_lib_hvlite::run_cargo_build 12
+        flowey e 8 flowey_lib_hvlite::run_cargo_build 24
         flowey e 8 flowey_lib_hvlite::build_tmk_vmm 0
         flowey e 8 flowey_core::pipeline::artifact::publish 1
       shell: bash
@@ -6032,35 +6328,44 @@ jobs:
         flowey e 9 flowey_lib_hvlite::cfg_openvmm_magicpath 0
       shell: bash
     - name: symlink protoc
+      run: flowey e 9 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 9 flowey_lib_hvlite::init_openvmm_magicpath_protoc 0
-        flowey e 9 flowey_lib_hvlite::init_cross_build 0
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 11
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 12
+        flowey e 9 flowey_lib_hvlite::init_cross_build 1
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 21
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 22
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 23
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 24
       shell: bash
     - name: cargo build sidecar
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 5
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 13
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 25
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 9 flowey_lib_hvlite::run_split_debug_info 8
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 14
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 26
         flowey e 9 flowey_lib_hvlite::build_sidecar 0
-        flowey e 9 flowey_lib_hvlite::init_cross_build 1
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 2
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 3
+      shell: bash
+    - name: inject cross env
+      run: |-
+        flowey e 9 flowey_lib_hvlite::init_cross_build 0
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 7
       shell: bash
     - name: cargo build openhcl_boot
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 1
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 4
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 8
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 9 flowey_lib_hvlite::run_split_debug_info 5
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 5
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 9
         flowey e 9 flowey_lib_hvlite::build_openhcl_boot 0
       shell: bash
     - name: extract and resolve kernel package
@@ -6072,14 +6377,18 @@ jobs:
       run: flowey e 9 flowey_lib_hvlite::resolve_openvmm_deps 0
       shell: bash
     - name: extract X64 sysroot.tar.gz
+      run: flowey e 9 flowey_lib_hvlite::init_openvmm_magicpath_openhcl_sysroot 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 9 flowey_lib_hvlite::init_openvmm_magicpath_openhcl_sysroot 0
         flowey e 9 flowey_lib_hvlite::init_cross_build 4
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 14
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 15
       shell: bash
     - name: cargo build openvmm_hcl
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 3
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 8
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 16
         flowey e 9 flowey_lib_hvlite::build_openvmm_hcl 1
         flowey e 9 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 24
       shell: bash
@@ -6094,17 +6403,22 @@ jobs:
       run: |-
         flowey e 9 flowey_lib_hvlite::build_openhcl_initrd 4
         flowey e 9 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 30
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 9 flowey_lib_hvlite::init_cross_build 2
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 1
       shell: bash
     - name: cargo build igvmfilegen
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 0
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 0
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 2
       shell: bash
     - name: split debug symbols
       run: |-
-        flowey e 9 flowey_lib_hvlite::run_split_debug_info 9
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 1
+        flowey e 9 flowey_lib_hvlite::run_split_debug_info 10
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 3
         flowey e 9 flowey_lib_hvlite::build_igvmfilegen 0
         flowey e 9 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 31
         flowey e 9 flowey_lib_hvlite::build_openhcl_igvm_from_recipe 32
@@ -6232,48 +6546,61 @@ jobs:
         flowey e 9 flowey_lib_hvlite::artifact_openhcl_igvm_from_recipe_extras::publish 0
       shell: bash
     - name: copying OpenHCL igvm extras to artifact dir
+      run: flowey e 9 flowey_lib_common::copy_to_artifact_dir 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 9 flowey_lib_common::copy_to_artifact_dir 0
         flowey e 9 flowey_lib_hvlite::init_cross_build 3
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 10
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 11
       shell: bash
     - name: cargo build openvmm_hcl
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 2
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 6
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 12
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 9 flowey_lib_hvlite::run_split_debug_info 6
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 7
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 13
         flowey e 9 flowey_lib_hvlite::build_openvmm_hcl 0
       shell: bash
     - name: copying openhcl build to publish dir
+      run: flowey e 9 flowey_lib_hvlite::artifact_openvmm_hcl_sizecheck::publish 0
+      shell: bash
+    - name: inject cross env
       run: |-
-        flowey e 9 flowey_lib_hvlite::artifact_openvmm_hcl_sizecheck::publish 0
         flowey e 9 flowey_lib_hvlite::init_cross_build 5
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 17
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 18
       shell: bash
     - name: cargo build pipette
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 4
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 9
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 19
       shell: bash
     - name: split debug symbols
       run: |-
         flowey e 9 flowey_lib_hvlite::run_split_debug_info 7
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 10
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 20
         flowey e 9 flowey_lib_hvlite::build_pipette 0
         flowey e 9 flowey_core::pipeline::artifact::publish 0
+      shell: bash
+    - name: inject cross env
+      run: |-
         flowey e 9 flowey_lib_hvlite::init_cross_build 6
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 27
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 28
       shell: bash
     - name: cargo build tmk_vmm
       run: |-
         flowey e 9 flowey_lib_common::run_cargo_build 6
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 15
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 29
       shell: bash
     - name: split debug symbols
       run: |-
-        flowey e 9 flowey_lib_hvlite::run_split_debug_info 10
-        flowey e 9 flowey_lib_hvlite::run_cargo_build 16
+        flowey e 9 flowey_lib_hvlite::run_split_debug_info 9
+        flowey e 9 flowey_lib_hvlite::run_cargo_build 30
         flowey e 9 flowey_lib_hvlite::build_tmk_vmm 0
         flowey e 9 flowey_core::pipeline::artifact::publish 1
       shell: bash

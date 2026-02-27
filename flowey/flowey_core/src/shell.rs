@@ -227,13 +227,51 @@ impl<'a> FloweyCmd<'a> {
     /// shadowed state (env, stdin, flags), and return the final
     /// [`xshell::Cmd`] ready for execution.
     fn into_resolved(self) -> xshell::Cmd<'a> {
+        let is_nix_shell = matches!(self.wrapper, Some(CommandWrapperKind::NixShell { .. }));
+
+        // For NixShell --pure wrappers, compute which env vars need to
+        // survive the pure barrier via `--keep`.  We replay all env
+        // changes in order so that interleaved Set/Remove/Clear
+        // operations produce the correct final state, then set the
+        // vars on the outer process and tell nix-shell to --keep them.
+        let (keep_env, other_env_changes) = if is_nix_shell {
+            let mut final_env: Vec<(OsString, OsString)> = Vec::new();
+            for change in self.env_changes {
+                match change {
+                    EnvChange::Set(k, v) => {
+                        // Upsert: replace an existing entry or append.
+                        if let Some(entry) = final_env.iter_mut().find(|(ek, _)| *ek == k) {
+                            entry.1 = v;
+                        } else {
+                            final_env.push((k, v));
+                        }
+                    }
+                    EnvChange::Remove(k) => {
+                        final_env.retain(|(ek, _)| *ek != k);
+                    }
+                    EnvChange::Clear => {
+                        final_env.clear();
+                    }
+                }
+            }
+            (final_env, Vec::new())
+        } else {
+            (Vec::new(), self.env_changes)
+        };
+
         let mut cmd = match self.wrapper {
-            Some(wrapper) => wrapper.wrap_cmd(self.sh, self.inner),
+            Some(wrapper) => wrapper.wrap_cmd(self.sh, self.inner, &keep_env),
             None => self.inner,
         };
 
-        // Re-apply env changes after wrapping to survive the wrapper's transformation
-        for change in self.env_changes {
+        // For NixShell: set env vars on the outer process so that
+        // --keep can pass them through the --pure barrier.
+        for (k, v) in &keep_env {
+            cmd = cmd.env(k, v);
+        }
+
+        // For non-NixShell wrappers: apply all env changes directly.
+        for change in other_env_changes {
             match change {
                 EnvChange::Set(k, v) => cmd = cmd.env(k, v),
                 EnvChange::Remove(k) => cmd = cmd.env_remove(k),
@@ -316,7 +354,12 @@ impl CommandWrapperKind {
     /// The `cmd` parameter contains only the program and arguments.
     /// Environment variables, stdin, and flags are applied by
     /// [`FloweyCmd`] after this method returns.
-    fn wrap_cmd<'a>(self, sh: &'a xshell::Shell, cmd: xshell::Cmd<'a>) -> xshell::Cmd<'a> {
+    fn wrap_cmd<'a>(
+        self,
+        sh: &'a xshell::Shell,
+        cmd: xshell::Cmd<'a>,
+        keep_env: &[(OsString, OsString)],
+    ) -> xshell::Cmd<'a> {
         let cmd_str = format!("{cmd}");
         match self {
             CommandWrapperKind::NixShell { path } => {
@@ -324,7 +367,12 @@ impl CommandWrapperKind {
                 if let Some(path) = path {
                     wrapped = wrapped.arg(path);
                 }
-                wrapped.arg("--pure").arg("--run").arg(cmd_str)
+                wrapped = wrapped.arg("--pure");
+                // Use --keep to pass env vars through the --pure barrier.
+                for (k, _) in keep_env {
+                    wrapped = wrapped.arg("--keep").arg(k);
+                }
+                wrapped.arg("--run").arg(cmd_str)
             }
             #[cfg(test)]
             CommandWrapperKind::ShCmd => sh.cmd("sh").arg("-c").arg(cmd_str),
@@ -451,6 +499,7 @@ mod tests {
         let cmd = CommandWrapperKind::NixShell { path: None }.wrap_cmd(
             sh.xshell(),
             xshell::cmd!(sh.xshell(), "cargo build --release"),
+            &[],
         );
         assert_eq!(
             format!("{cmd}"),
@@ -464,11 +513,80 @@ mod tests {
         let cmd = CommandWrapperKind::NixShell {
             path: Some("/my/shell.nix".into()),
         }
-        .wrap_cmd(sh.xshell(), xshell::cmd!(sh.xshell(), "cargo build"));
+        .wrap_cmd(sh.xshell(), xshell::cmd!(sh.xshell(), "cargo build"), &[]);
         assert_eq!(
             format!("{cmd}"),
             "nix-shell /my/shell.nix --pure --run \"cargo build\""
         );
+    }
+
+    #[test]
+    fn nix_wrapper_adds_keep_for_env_vars() {
+        let sh = FloweyShell::new().unwrap();
+        let keep_env = vec![
+            (OsString::from("FOO"), OsString::from("bar")),
+            (OsString::from("BAZ"), OsString::from("qux")),
+        ];
+        let cmd = CommandWrapperKind::NixShell { path: None }.wrap_cmd(
+            sh.xshell(),
+            xshell::cmd!(sh.xshell(), "cargo build"),
+            &keep_env,
+        );
+        assert_eq!(
+            format!("{cmd}"),
+            "nix-shell --pure --keep FOO --keep BAZ --run \"cargo build\""
+        );
+    }
+
+    #[test]
+    fn nix_wrapper_no_keep_without_env_vars() {
+        let sh = FloweyShell::new().unwrap();
+        let cmd = CommandWrapperKind::NixShell { path: None }.wrap_cmd(
+            sh.xshell(),
+            xshell::cmd!(sh.xshell(), "my-cmd"),
+            &[],
+        );
+        assert_eq!(format!("{cmd}"), "nix-shell --pure --run my-cmd");
+    }
+
+    #[test]
+    fn nix_env_set_remove_set_keeps_final() {
+        // Exercises the full into_resolved path:
+        // Set FOO=first, remove FOO, set FOO=second → FOO=second.
+        let mut sh = FloweyShell::new().unwrap();
+        sh.set_wrapper(Some(CommandWrapperKind::NixShell { path: None }));
+        let cmd = sh
+            .wrap(xshell::cmd!(sh.xshell(), "echo ok"))
+            .env("FOO", "first")
+            .env_remove("FOO")
+            .env("FOO", "second");
+        let display = format!("{cmd}");
+        // Display shows the unwrapped command, not the nix-shell wrapper.
+        assert_eq!(display, "echo ok");
+        // The resolved command uses --keep FOO and sets FOO=second on the
+        // outer process.
+        let resolved = format!("{}", cmd.into_resolved());
+        assert!(
+            resolved.contains("FOO"),
+            "FOO should appear in --keep and env: {resolved}"
+        );
+        assert!(
+            !resolved.contains("first"),
+            "FOO=first should have been removed: {resolved}"
+        );
+    }
+
+    #[test]
+    fn nix_env_set_clear_leaves_empty() {
+        // Set FOO, then clear — no --keep args or env vars.
+        let mut sh = FloweyShell::new().unwrap();
+        sh.set_wrapper(Some(CommandWrapperKind::NixShell { path: None }));
+        let cmd = sh
+            .wrap(xshell::cmd!(sh.xshell(), "echo ok"))
+            .env("FOO", "doomed")
+            .env_clear();
+        let resolved = format!("{}", cmd.into_resolved());
+        assert_eq!(resolved, "nix-shell --pure --run \"echo ok\"");
     }
 
     #[test]
