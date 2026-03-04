@@ -432,7 +432,7 @@ impl Options {
                             }
                         }
                     })
-                    .unwrap_or(KeepAliveConfig::Disabled);
+                    .unwrap_or(KeepAliveConfig::EnabledHostAndPrivatePoolPresent);
         let nvme_always_flr = parse_env_bool("OPENHCL_NVME_ALWAYS_FLR");
         let test_configuration = read_env("OPENHCL_TEST_CONFIG").and_then(|x| {
             x.to_string_lossy()

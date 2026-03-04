@@ -684,9 +684,8 @@ impl LoadedVm {
             self.nvme_keep_alive = KeepAliveConfig::Disabled
         };
 
-        if !capabilities_flags.enable_mana_keepalive() {
-            self.mana_keep_alive = KeepAliveConfig::Disabled
-        };
+        // MANA keepalive is always enabled regardless of host capability flags.
+        let _ = capabilities_flags.enable_mana_keepalive();
 
         // Do everything before the log flush under a span.
         let r = async {
